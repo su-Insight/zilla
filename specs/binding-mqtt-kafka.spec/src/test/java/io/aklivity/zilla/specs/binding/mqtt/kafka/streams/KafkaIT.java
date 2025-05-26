@@ -154,6 +154,24 @@ public class KafkaIT
 
     @Test
     @Specification({
+        "${kafka}/publish.10k/client",
+        "${kafka}/publish.10k/server"})
+    public void shouldSendMessage10k() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.retained.10k/client",
+        "${kafka}/publish.retained.10k/server"})
+    public void shouldSendRetainedMessage10k() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${kafka}/publish.retained/client",
         "${kafka}/publish.retained/server"})
     public void shouldPublishRetainedMessage() throws Exception
@@ -688,6 +706,15 @@ public class KafkaIT
         "${kafka}/session.will.message.abort.deliver.will/client",
         "${kafka}/session.will.message.abort.deliver.will/server"})
     public void shouldSendWillMessageOnAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/session.will.message.10k.abort.deliver.will/client",
+        "${kafka}/session.will.message.10k.abort.deliver.will/server"})
+    public void shouldSendWillMessage10kOnAbort() throws Exception
     {
         k3po.finish();
     }

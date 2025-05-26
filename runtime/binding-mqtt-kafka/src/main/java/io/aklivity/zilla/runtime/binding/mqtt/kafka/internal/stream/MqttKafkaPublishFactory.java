@@ -68,6 +68,9 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
     private static final KafkaAckMode KAFKA_DEFAULT_ACK_MODE = KafkaAckMode.LEADER_ONLY;
     private static final String KAFKA_TYPE_NAME = "kafka";
     private static final byte SLASH_BYTE = (byte) '/';
+    private static final int DATA_FLAG_INIT = 0x02;
+    private static final int DATA_FLAG_FIN = 0x01;
+    private static final int DATA_FLAG_COMPLETE = 0x03;
 
     private final OctetsFW emptyRO = new OctetsFW().wrap(new UnsafeBuffer(0L, 0), 0, 0);
     private final BeginFW beginRO = new BeginFW();
@@ -196,6 +199,8 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
         private Array32FW<String16FW> topicNameHeaders;
         private OctetsFW clientIdOctets;
         private boolean retainAvailable;
+        private boolean retainedData;
+        private boolean fragmentedData;
 
         private MqttPublishProxy(
             MessageConsumer mqtt,
@@ -375,76 +380,82 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
                 mqttDataEx = extension.get(mqttDataExRO::tryWrap);
             }
 
-            assert mqttDataEx.kind() == MqttDataExFW.KIND_PUBLISH;
-            final MqttPublishDataExFW mqttPublishDataEx = mqttDataEx.publish();
-            kafkaHeadersRW.wrap(kafkaHeadersBuffer, 0, kafkaHeadersBuffer.capacity());
-
-            topicNameHeaders.forEach(th -> addHeader(helper.kafkaFilterHeaderName, th));
-
-            addHeader(helper.kafkaLocalHeaderName, clientIdOctets);
-
-            if (mqttPublishDataEx.expiryInterval() != -1)
+            if ((flags & DATA_FLAG_INIT) != 0x00)
             {
-                final MutableDirectBuffer expiryBuffer = new UnsafeBuffer(new byte[4]);
-                expiryBuffer.putInt(0, mqttPublishDataEx.expiryInterval(), ByteOrder.BIG_ENDIAN);
-                kafkaHeadersRW.item(h ->
+                assert mqttDataEx.kind() == MqttDataExFW.KIND_PUBLISH;
+                final MqttPublishDataExFW mqttPublishDataEx = mqttDataEx.publish();
+                kafkaHeadersRW.wrap(kafkaHeadersBuffer, 0, kafkaHeadersBuffer.capacity());
+
+                topicNameHeaders.forEach(th -> addHeader(helper.kafkaFilterHeaderName, th));
+
+                addHeader(helper.kafkaLocalHeaderName, clientIdOctets);
+
+                if (mqttPublishDataEx.expiryInterval() != -1)
                 {
-                    h.nameLen(helper.kafkaTimeoutHeaderName.sizeof());
-                    h.name(helper.kafkaTimeoutHeaderName);
-                    h.valueLen(4);
-                    h.value(expiryBuffer, 0, expiryBuffer.capacity());
-                });
+                    final MutableDirectBuffer expiryBuffer = new UnsafeBuffer(new byte[4]);
+                    expiryBuffer.putInt(0, mqttPublishDataEx.expiryInterval(), ByteOrder.BIG_ENDIAN);
+                    kafkaHeadersRW.item(h ->
+                    {
+                        h.nameLen(helper.kafkaTimeoutHeaderName.sizeof());
+                        h.name(helper.kafkaTimeoutHeaderName);
+                        h.valueLen(4);
+                        h.value(expiryBuffer, 0, expiryBuffer.capacity());
+                    });
+                }
+
+                if (mqttPublishDataEx.contentType().length() != -1)
+                {
+                    addHeader(helper.kafkaContentTypeHeaderName, mqttPublishDataEx.contentType());
+                }
+
+                if (payload.sizeof() != 0 && mqttPublishDataEx.format() != null &&
+                    !mqttPublishDataEx.format().get().equals(MqttPayloadFormat.NONE))
+                {
+                    addHeader(helper.kafkaFormatHeaderName, mqttPublishDataEx.format());
+                }
+
+                if (mqttPublishDataEx.responseTopic().length() != -1)
+                {
+                    final String16FW responseTopic = mqttPublishDataEx.responseTopic();
+                    addHeader(helper.kafkaReplyToHeaderName, messages.topic);
+                    addHeader(helper.kafkaReplyKeyHeaderName, responseTopic);
+
+                    addFiltersHeader(responseTopic);
+                }
+
+                if (mqttPublishDataEx.correlation().bytes() != null)
+                {
+                    addHeader(helper.kafkaCorrelationHeaderName, mqttPublishDataEx.correlation().bytes());
+                }
+
+
+                mqttPublishDataEx.properties().forEach(property ->
+                    addHeader(property.key(), property.value()));
+
+                addHeader(helper.kafkaQosHeaderName, qosLevels.get(mqttPublishDataEx.qos()));
+
+                final int deferred = mqttPublishDataEx.deferred();
+                kafkaDataEx = kafkaDataExRW
+                    .wrap(extBuffer, 0, extBuffer.capacity())
+                    .typeId(kafkaTypeId)
+                    .merged(m -> m.produce(mp -> mp
+                        .deferred(deferred)
+                        .timestamp(now().toEpochMilli())
+                        .partition(p -> p.partitionId(-1).partitionOffset(-1))
+                        .key(b -> b.set(key))
+                        .hashKey(this::setHashKey)
+                        .headers(kafkaHeadersRW.build())))
+                    .build();
+
+                retainedData = (mqttPublishDataEx.flags() & 1 << MqttPublishFlags.RETAIN.value()) != 0;
             }
 
-            if (mqttPublishDataEx.contentType().length() != -1)
-            {
-                addHeader(helper.kafkaContentTypeHeaderName, mqttPublishDataEx.contentType());
-            }
-
-            if (payload.sizeof() != 0 && mqttPublishDataEx.format() != null &&
-                !mqttPublishDataEx.format().get().equals(MqttPayloadFormat.NONE))
-            {
-                addHeader(helper.kafkaFormatHeaderName, mqttPublishDataEx.format());
-            }
-
-            if (mqttPublishDataEx.responseTopic().length() != -1)
-            {
-                final String16FW responseTopic = mqttPublishDataEx.responseTopic();
-                addHeader(helper.kafkaReplyToHeaderName, messages.topic);
-                addHeader(helper.kafkaReplyKeyHeaderName, responseTopic);
-
-                addFiltersHeader(responseTopic);
-            }
-
-            if (mqttPublishDataEx.correlation().bytes() != null)
-            {
-                addHeader(helper.kafkaCorrelationHeaderName, mqttPublishDataEx.correlation().bytes());
-            }
-
-
-            mqttPublishDataEx.properties().forEach(property ->
-                addHeader(property.key(), property.value()));
-
-            addHeader(helper.kafkaQosHeaderName, qosLevels.get(mqttPublishDataEx.qos()));
-
-            final int deferred = mqttPublishDataEx.deferred();
-            kafkaDataEx = kafkaDataExRW
-                .wrap(extBuffer, 0, extBuffer.capacity())
-                .typeId(kafkaTypeId)
-                .merged(m -> m.produce(mp -> mp
-                    .deferred(deferred)
-                    .timestamp(now().toEpochMilli())
-                    .partition(p -> p.partitionId(-1).partitionOffset(-1))
-                    .key(b -> b.set(key))
-                    .hashKey(this::setHashKey)
-                    .headers(kafkaHeadersRW.build())))
-                .build();
-
+            fragmentedData = (flags & DATA_FLAG_FIN) == 0;
             messages.doKafkaData(traceId, authorization, budgetId, reserved, flags, payload, kafkaDataEx);
 
             if (retainAvailable)
             {
-                if ((mqttPublishDataEx.flags() & 1 << MqttPublishFlags.RETAIN.value()) != 0)
+                if (retainedData)
                 {
                     retained.doKafkaData(traceId, authorization, budgetId, reserved, flags, payload, kafkaDataEx);
                 }
@@ -458,8 +469,13 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
                                 .capabilities(c -> c.set(KafkaCapabilities.PRODUCE_ONLY))
                                 .key(key)))
                             .build();
-                    retained.doKafkaFlush(traceId, authorization, budgetId, reserved, kafkaFlushEx);
+                    retained.doKafkaFlush(traceId, authorization, budgetId, kafkaFlushEx);
                 }
+            }
+
+            if ((flags & DATA_FLAG_FIN) != 0x00)
+            {
+                retainedData = false;
             }
         }
 
@@ -654,8 +670,8 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
             int padding,
             int capabilities)
         {
-            final long newInitialAck = retainAvailable ? Math.min(messages.initialAck, retained.initialAck) : messages.initialAck;
-            final int newInitialMax = retainAvailable ? Math.min(messages.initialMax, retained.initialMax) : messages.initialMax;
+            final long newInitialAck = retainedData ? Math.min(messages.initialAck, retained.initialAck) : messages.initialAck;
+            final int newInitialMax = retainedData ? Math.max(messages.initialMax, retained.initialMax) : messages.initialMax;
 
             if (initialAck != newInitialAck || initialMax != newInitialMax)
             {
@@ -1088,6 +1104,7 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
 
         private long initialSeq;
         private long initialAck;
+        private int initialPad;
         private int initialMax;
 
         private long replySeq;
@@ -1115,8 +1132,8 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
             long affinity,
             int qos)
         {
-            initialSeq = delegate.initialSeq;
-            initialAck = delegate.initialAck;
+            initialSeq = 0;
+            initialAck = 0;
             initialMax = delegate.initialMax;
             state = MqttKafkaState.openingInitial(state);
 
@@ -1145,13 +1162,12 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
             long traceId,
             long authorization,
             long budgetId,
-            int reserved,
             KafkaFlushExFW extension)
         {
             doFlush(kafka, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                traceId, authorization, budgetId, reserved, extension);
+                traceId, authorization, budgetId, initialPad, extension);
 
-            initialSeq += reserved;
+            initialSeq += initialPad;
 
             assert initialSeq <= initialAck + initialMax;
         }
@@ -1163,9 +1179,6 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
         {
             if (!MqttKafkaState.initialClosed(state))
             {
-                initialSeq = delegate.initialSeq;
-                initialAck = delegate.initialAck;
-                initialMax = delegate.initialMax;
                 state = MqttKafkaState.closeInitial(state);
 
                 doEnd(kafka, originId, routedId, initialId, initialSeq, initialAck, initialMax, traceId, authorization);
@@ -1178,9 +1191,6 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
         {
             if (!MqttKafkaState.initialClosed(state))
             {
-                initialSeq = delegate.initialSeq;
-                initialAck = delegate.initialAck;
-                initialMax = delegate.initialMax;
                 state = MqttKafkaState.closeInitial(state);
 
                 doAbort(kafka, originId, routedId, initialId, initialSeq, initialAck, initialMax, traceId, authorization);
@@ -1341,10 +1351,11 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
             final int capabilities = window.capabilities();
 
             assert acknowledge <= sequence;
-            assert acknowledge >= delegate.initialAck;
-            assert maximum >= delegate.initialMax;
+            assert acknowledge >= initialAck;
+            assert maximum >= initialMax;
 
             initialAck = acknowledge;
+            initialPad = padding;
             initialMax = maximum;
             state = MqttKafkaState.openInitial(state);
 
@@ -1361,11 +1372,11 @@ public class MqttKafkaPublishFactory implements MqttKafkaStreamFactory
             final long traceId = reset.traceId();
 
             assert acknowledge <= sequence;
-            assert acknowledge >= delegate.initialAck;
+            assert acknowledge >= initialAck;
 
-            delegate.initialAck = acknowledge;
+            initialAck = acknowledge;
 
-            assert delegate.initialAck <= delegate.initialSeq;
+            assert initialAck <= initialSeq;
 
             delegate.doMqttReset(traceId);
         }

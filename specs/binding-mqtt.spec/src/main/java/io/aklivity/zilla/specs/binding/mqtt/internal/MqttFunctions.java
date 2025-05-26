@@ -630,6 +630,13 @@ public final class MqttFunctions
                 sessionDataExRW.wrap(writeBuffer, MqttBeginExFW.FIELD_OFFSET_SESSION, writeBuffer.capacity());
             }
 
+            public MqttSessionDataExBuilder deferred(
+                int deferred)
+            {
+                sessionDataExRW.deferred(deferred);
+                return this;
+            }
+
             public MqttSessionDataExBuilder kind(
                 String kind)
             {
@@ -978,17 +985,10 @@ public final class MqttFunctions
             return this;
         }
 
-        public MqttWillMessageBuilder payload(
-            String payload)
+        public MqttWillMessageBuilder payloadSize(
+            int payloadSize)
         {
-            willMessageRW.payload(c -> c.bytes(b -> b.set(payload.getBytes(UTF_8))));
-            return this;
-        }
-
-        public MqttWillMessageBuilder payloadBytes(
-            byte[] payload)
-        {
-            willMessageRW.payload(c -> c.bytes(b -> b.set(payload)));
+            willMessageRW.payloadSize(payloadSize);
             return this;
         }
 

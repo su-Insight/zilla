@@ -1157,6 +1157,7 @@ public class MqttFunctionsTest
         final byte[] array = MqttFunctions.dataEx()
             .typeId(0)
             .session()
+                .deferred(10)
                 .kind("WILL")
                 .build()
             .build();
@@ -1165,6 +1166,7 @@ public class MqttFunctionsTest
         MqttDataExFW mqttPublishDataEx = new MqttDataExFW().wrap(buffer, 0, buffer.capacity());
 
         assertEquals(0, mqttPublishDataEx.typeId());
+        assertEquals(10, mqttPublishDataEx.session().deferred());
         assertEquals("WILL", mqttPublishDataEx.session().kind().toString());
     }
 
@@ -1298,7 +1300,7 @@ public class MqttFunctionsTest
                 .willId("2")
                 .correlation("request-id-1")
                 .userProperty("name", "value")
-                .payload("client failed")
+                .payloadSize(10)
             .build();
 
         DirectBuffer buffer = new UnsafeBuffer(array);
@@ -1318,8 +1320,7 @@ public class MqttFunctionsTest
             .matchFirst(h ->
                 "name".equals(h.key().asString()) &&
                     "value".equals(h.value().asString())));
-        assertEquals("client failed", willMessage.payload()
-            .bytes().get((b, o, m) -> b.getStringWithoutLengthUtf8(o, m - o)));
+        assertEquals(10, willMessage.payloadSize());
     }
 
     @Test
@@ -1331,7 +1332,7 @@ public class MqttFunctionsTest
             .flags("RETAIN")
             .responseTopic("response_topic")
             .correlationBytes("request-id-1".getBytes(UTF_8))
-            .payloadBytes(new byte[] {0, 1, 2, 3, 4, 5})
+            .payloadSize(10)
             .build();
 
         DirectBuffer buffer = new UnsafeBuffer(array);
@@ -1344,8 +1345,7 @@ public class MqttFunctionsTest
         assertEquals("response_topic", willMessage.responseTopic().asString());
         assertEquals("request-id-1", willMessage.correlation()
             .bytes().get((b, o, m) -> b.getStringWithoutLengthUtf8(o, m - o)));
-        assertArrayEquals(new byte[] {0, 1, 2, 3, 4, 5}, willMessage.payload()
-            .bytes().get((b, o, m) -> b.getStringWithoutLengthUtf8(o, m - o)).getBytes());
+        assertEquals(10, willMessage.payloadSize());
     }
 
     @Test
