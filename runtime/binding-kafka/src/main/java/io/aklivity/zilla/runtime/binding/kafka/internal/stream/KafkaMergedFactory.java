@@ -1961,7 +1961,7 @@ public final class KafkaMergedFactory implements BindingHandler
             partitions.forEach(p -> offsetsByPartitionId.put(p.partitionId(),
                 new KafkaPartitionOffset(
                     p.partitionId(),
-                    p.partitionOffset(),
+                    p.partitionOffset() == LIVE.value() ? HISTORICAL.value() : p.partitionOffset(),
                     0,
                     p.leaderEpoch(),
                     p.metadata().asString())));
@@ -2833,7 +2833,8 @@ public final class KafkaMergedFactory implements BindingHandler
                             .partitionId(offsetAck.partitionId())
                             .partitionOffset(offsetAck.partitionOffset())
                             .metadata(offsetAck.metadata()))
-                        .leaderEpoch(partitionOffset.leaderEpoch))
+                        .leaderEpoch(partitionOffset.leaderEpoch)
+                        .correlationId(consumer.correlationId()))
                     .build();
 
                 final int reserved = initialPad;
