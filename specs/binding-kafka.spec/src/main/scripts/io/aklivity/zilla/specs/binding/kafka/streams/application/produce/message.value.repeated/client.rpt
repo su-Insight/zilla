@@ -74,7 +74,6 @@ write zilla:data.ext ${kafka:dataEx()
                               .typeId(zilla:id("kafka"))
                               .produce()
                                   .timestamp(newTimestamp)
-                                  .sequence(0)
                                   .build()
                               .build()}
 write "Hello, world"
@@ -84,7 +83,6 @@ write zilla:data.ext ${kafka:dataEx()
                               .typeId(zilla:id("kafka"))
                               .produce()
                                   .timestamp(newTimestamp)
-                                  .sequence(1)
                                   .build()
                               .build()}
 write "Hello, world"

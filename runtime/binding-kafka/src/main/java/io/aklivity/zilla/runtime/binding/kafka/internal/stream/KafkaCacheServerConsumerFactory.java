@@ -507,8 +507,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
         long acknowledge,
         int maximum,
         long traceId,
-        long authorization,
-        Flyweight extension)
+        long authorization)
     {
         final ResetFW reset = resetRW.wrap(writeBuffer, 0, writeBuffer.capacity())
             .originId(originId)
@@ -519,7 +518,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             .maximum(maximum)
             .traceId(traceId)
             .authorization(authorization)
-            .extension(extension.buffer(), extension.offset(), extension.sizeof())
             .build();
 
         sender.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());
@@ -557,8 +555,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
         private String leaderId;
         private String memberId;
         private String instanceId;
-        private String host;
-        private int port;
         private int timeout;
         private int generationId;
 
@@ -651,11 +647,11 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
                 this.receiver = newStream(this::onConsumerMessage,
                     originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, authorization, 0L, ex -> ex
-                        .set((b, o, l) -> kafkaBeginExRW.wrap(b, o, l)
+                    traceId, authorization, 0L,
+                    ex -> ex.set((b, o, l) -> kafkaBeginExRW.wrap(b, o, l)
                         .typeId(kafkaTypeId)
-                        .group(g -> g
-                            .groupId(groupId)
+                        .group(g ->
+                            g.groupId(groupId)
                             .protocol("rebalance")
                             .timeout(timeout)
                             .metadataLen(metadata.sizeof())
@@ -751,7 +747,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             final long sequence = reset.sequence();
             final long acknowledge = reset.acknowledge();
             final long traceId = reset.traceId();
-            final OctetsFW extension = reset.extension();
 
             assert acknowledge <= sequence;
             assert acknowledge >= this.initialAck;
@@ -761,7 +756,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert this.initialAck <= this.initialSeq;
 
-            streams.forEach(m -> m.cleanup(traceId, extension));
+            streams.forEach(m -> m.cleanup(traceId));
 
             doConsumerReplyReset(traceId);
 
@@ -848,8 +843,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             final KafkaGroupBeginExFW kafkaGroupBeginEx = kafkaBeginEx != null ? kafkaBeginEx.group() : null;
 
             instanceId = kafkaGroupBeginEx.instanceId().asString();
-            host = kafkaGroupBeginEx.host().asString();
-            port = kafkaGroupBeginEx.port();
 
             state = KafkaState.openedReply(state);
 
@@ -1006,7 +999,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert replyAck <= replySeq;
 
-            streams.forEach(s -> s.cleanup(traceId, EMPTY_OCTETS));
+            streams.forEach(s -> s.cleanup(traceId));
 
             doConsumerInitialAbort(traceId);
 
@@ -1019,7 +1012,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             if (!KafkaState.replyClosed(state))
             {
                 doReset(receiver, originId, routedId, replyId, replySeq, replyAck, replyMax,
-                    traceId, authorization, EMPTY_OCTETS);
+                    traceId, authorization);
 
                 state = KafkaState.closedReply(state);
             }
@@ -1276,7 +1269,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert initialAck <= initialSeq;
 
-            cleanup(traceId, EMPTY_OCTETS);
+            cleanup(traceId);
         }
 
         private void onConsumerInitialFlush(
@@ -1323,19 +1316,18 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert initialAck <= initialSeq;
 
-            cleanup(traceId, EMPTY_OCTETS);
+            cleanup(traceId);
         }
 
         private void doConsumerInitialReset(
-            long traceId,
-            OctetsFW extension)
+            long traceId)
         {
             if (KafkaState.initialOpening(state) && !KafkaState.initialClosed(state))
             {
                 state = KafkaState.closedInitial(state);
 
                 doReset(sender, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, authorization, extension);
+                    traceId, authorization);
             }
 
             state = KafkaState.closedInitial(state);
@@ -1357,16 +1349,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             state = KafkaState.openingReply(state);
 
             doBegin(sender, originId, routedId, replyId, replySeq, replyAck, replyMax,
-                traceId, authorization, affinity, ex -> ex.set((b, o, l) -> kafkaBeginExRW.wrap(b, o, l)
-                    .typeId(kafkaTypeId)
-                    .consumer(c -> c
-                        .groupId(fanout.groupId)
-                        .consumerId(fanout.consumerId)
-                        .host(fanout.host)
-                        .port(fanout.port)
-                        .timeout(fanout.timeout)
-                        .topic(topic))
-                    .build().sizeof()));
+                traceId, authorization, affinity, EMPTY_OCTETS);
         }
 
         private void doConsumerReplyData(
@@ -1433,7 +1416,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert replyAck <= replySeq;
 
-            cleanup(traceId, EMPTY_OCTETS);
+            cleanup(traceId);
         }
 
         private void onConsumerReplyWindow(
@@ -1473,10 +1456,9 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
         }
 
         private void cleanup(
-            long traceId,
-            OctetsFW extension)
+            long traceId)
         {
-            doConsumerInitialReset(traceId, extension);
+            doConsumerInitialReset(traceId);
             doConsumerReplyAbort(traceId);
 
             offsetCommit.cleanup(traceId);
@@ -1543,11 +1525,10 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
                     traceId, this.authorization, affinity, ex -> ex.set((b, o, l) -> kafkaBeginExRW.wrap(b, o, l)
                         .typeId(kafkaTypeId)
                         .offsetCommit(oc -> oc
+                            .topic(delegate.topic)
                             .groupId(delegate.fanout.groupId)
                             .memberId(delegate.fanout.memberId)
-                            .instanceId(delegate.fanout.instanceId)
-                            .host(delegate.fanout.host)
-                            .port(delegate.fanout.port))
+                            .instanceId(delegate.fanout.instanceId))
                         .build().sizeof()));
                 state = KafkaState.openingInitial(state);
             }
@@ -1588,7 +1569,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             final long sequence = reset.sequence();
             final long acknowledge = reset.acknowledge();
             final long traceId = reset.traceId();
-            final OctetsFW extension = reset.extension();
 
             assert acknowledge <= sequence;
             assert acknowledge >= delegate.initialAck;
@@ -1598,7 +1578,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert delegate.initialAck <= delegate.initialSeq;
 
-            delegate.cleanup(traceId, extension);
+            delegate.cleanup(traceId);
 
             doOffsetCommitReplyReset(traceId);
         }
@@ -1707,7 +1687,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert replyAck <= replySeq;
 
-            delegate.cleanup(traceId, EMPTY_OCTETS);
+            delegate.cleanup(traceId);
         }
 
         private void onOffsetCommitReplyAbort(
@@ -1725,7 +1705,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
 
             assert replyAck <= replySeq;
 
-            delegate.cleanup(traceId, EMPTY_OCTETS);
+            delegate.cleanup(traceId);
         }
 
         private void doOffsetCommitReplyReset(
@@ -1734,7 +1714,7 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             if (!KafkaState.replyClosed(state))
             {
                 doReset(receiver, originId, routedId, replyId, replySeq, replyAck, replyMax,
-                    traceId, authorization, EMPTY_OCTETS);
+                    traceId, authorization);
 
                 state = KafkaState.closedReply(state);
             }
@@ -1750,7 +1730,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
             doOffsetCommitInitialBegin(traceId, 0);
 
             commitRequests.add(new KafkaPartitionOffset(
-                delegate.topic,
                 partition.partitionId(),
                 partition.partitionOffset(),
                 delegate.fanout.generationId,
@@ -1797,7 +1776,6 @@ public final class KafkaCacheServerConsumerFactory implements BindingHandler
                         .set((b, o, l) -> kafkaDataExRW.wrap(b, o, l)
                         .typeId(kafkaTypeId)
                         .offsetCommit(oc -> oc
-                            .topic(delegate.topic)
                             .progress(p -> p.partitionId(commit.partitionId)
                                 .partitionOffset(commit.partitionOffset)
                                 .metadata(commit.metadata))

@@ -48,7 +48,7 @@ write 238                               # size
           21s "max.compaction.lag.ms"
           25s "min.cleanable.dirty.ratio"
 
-read 372                                # size
+read 365                                # size
      ${requestId}
      0
      1                                  # resources
@@ -113,6 +113,16 @@ read 372                                # size
          [0x00]
          [0x00]
 
+read notify RECEIVED_CONFIG
+
+connect await RECEIVED_CONFIG
+        "zilla://streams/net0"
+  option zilla:window 8192
+  option zilla:transmission "duplex"
+  option zilla:byteorder "network"
+
+connected
+
 write 26                                # size
       3s                                # metadata
       5s                                # v5
@@ -170,9 +180,6 @@ write zilla:begin.ext ${proxy:beginEx()
                                  .destination("broker1.example.com")
                                  .sourcePort(0)
                                  .destinationPort(9092)
-                                 .build()
-                               .info()
-                                 .authority("broker1.example.com")
                                  .build()
                                .build()}
 
@@ -237,9 +244,6 @@ write zilla:begin.ext ${proxy:beginEx()
                                  .destination("broker2.example.com")
                                  .sourcePort(0)
                                  .destinationPort(9092)
-                                 .build()
-                               .info()
-                                 .authority("broker2.example.com")
                                  .build()
                                .build()}
 

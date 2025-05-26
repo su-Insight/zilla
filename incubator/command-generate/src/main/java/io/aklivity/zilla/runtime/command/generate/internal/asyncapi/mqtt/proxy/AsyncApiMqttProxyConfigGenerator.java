@@ -43,10 +43,10 @@ import io.aklivity.zilla.runtime.command.generate.internal.asyncapi.view.Message
 import io.aklivity.zilla.runtime.command.generate.internal.asyncapi.view.ServerView;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.CatalogedConfigBuilder;
-import io.aklivity.zilla.runtime.engine.config.EngineConfig;
-import io.aklivity.zilla.runtime.engine.config.EngineConfigWriter;
+import io.aklivity.zilla.runtime.engine.config.ConfigWriter;
+import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfigBuilder;
-import io.aklivity.zilla.runtime.model.json.config.JsonModelConfig;
+import io.aklivity.zilla.runtime.validator.json.config.JsonValidatorConfig;
 import io.aklivity.zilla.runtime.vault.filesystem.config.FileSystemOptionsConfig;
 
 public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
@@ -74,8 +74,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         this.mqttsPorts = resolvePortsForScheme("mqtts");
         this.isPlainEnabled = mqttPorts != null;
         this.isTlsEnabled = mqttsPorts != null;
-        EngineConfigWriter configWriter = new EngineConfigWriter(null);
-        String yaml = configWriter.write(createConfig(), createEnvVarsPatch());
+        ConfigWriter configWriter = new ConfigWriter(null);
+        String yaml = configWriter.write(createNamespace(), createEnvVarsPatch());
         return unquoteEnvVars(yaml, unquotedEnvVars());
     }
 
@@ -137,54 +137,52 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return result;
     }
 
-    private EngineConfig createConfig()
+    private NamespaceConfig createNamespace()
     {
-        return EngineConfig.builder()
-            .namespace()
-                .name("example")
-                .binding()
-                    .name("tcp_server0")
-                    .type("tcp")
-                    .kind(SERVER)
-                    .options(TcpOptionsConfig::builder)
-                        .host("0.0.0.0")
-                        .ports(allPorts)
-                        .build()
-                    .inject(this::injectPlainTcpRoute)
-                    .inject(this::injectTlsTcpRoute)
+        return NamespaceConfig.builder()
+            .name("example")
+            .binding()
+                .name("tcp_server0")
+                .type("tcp")
+                .kind(SERVER)
+                .options(TcpOptionsConfig::builder)
+                    .host("0.0.0.0")
+                    .ports(allPorts)
                     .build()
-                .inject(this::injectTlsServer)
-                .binding()
-                    .name("mqtt_server0")
-                    .type("mqtt")
-                    .kind(SERVER)
-                    .inject(this::injectMqttServerOptions)
-                    .inject(this::injectMqttServerRoutes)
-                    .build()
-                .binding()
-                    .name("mqtt_client0")
-                    .type("mqtt")
-                    .kind(CLIENT)
-                    .exit(isTlsEnabled ? "tls_client0" : "tcp_client0")
-                    .build()
-                .inject(this::injectTlsClient)
-                .binding()
-                    .name("tcp_client0")
-                    .type("tcp")
-                    .kind(CLIENT)
-                    .options(TcpOptionsConfig::builder)
-                        .host("") // env
-                        .ports(new int[]{0}) // env
-                        .build()
-                    .build()
-                .inject(this::injectVaults)
-                .inject(this::injectCatalog)
+                .inject(this::injectPlainTcpRoute)
+                .inject(this::injectTlsTcpRoute)
                 .build()
+            .inject(this::injectTlsServer)
+            .binding()
+                .name("mqtt_server0")
+                .type("mqtt")
+                .kind(SERVER)
+                .inject(this::injectMqttServerOptions)
+                .inject(this::injectMqttServerRoutes)
+                .build()
+            .binding()
+                .name("mqtt_client0")
+                .type("mqtt")
+                .kind(CLIENT)
+                .exit(isTlsEnabled ? "tls_client0" : "tcp_client0")
+                .build()
+            .inject(this::injectTlsClient)
+            .binding()
+                .name("tcp_client0")
+                .type("tcp")
+                .kind(CLIENT)
+                .options(TcpOptionsConfig::builder)
+                    .host("") // env
+                    .ports(new int[]{0}) // env
+                    .build()
+                .build()
+            .inject(this::injectVaults)
+            .inject(this::injectCatalog)
             .build();
     }
 
-    private <C> BindingConfigBuilder<C> injectPlainTcpRoute(
-        BindingConfigBuilder<C> binding)
+    private BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> injectPlainTcpRoute(
+        BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> binding)
     {
         if (isPlainEnabled)
         {
@@ -199,8 +197,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return binding;
     }
 
-    private <C> BindingConfigBuilder<C> injectTlsTcpRoute(
-        BindingConfigBuilder<C> binding)
+    private BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> injectTlsTcpRoute(
+        BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> binding)
     {
         if (isTlsEnabled)
         {
@@ -215,8 +213,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return binding;
     }
 
-    private <C> NamespaceConfigBuilder<C> injectTlsServer(
-        NamespaceConfigBuilder<C> namespace)
+    private NamespaceConfigBuilder<NamespaceConfig> injectTlsServer(
+        NamespaceConfigBuilder<NamespaceConfig> namespace)
     {
         if (isTlsEnabled)
         {
@@ -237,8 +235,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return namespace;
     }
 
-    private <C> BindingConfigBuilder<C> injectMqttServerOptions(
-        BindingConfigBuilder<C> binding)
+    private BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> injectMqttServerOptions(
+        BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> binding)
     {
         for (Map.Entry<String, Channel> channelEntry : asyncApi.channels.entrySet())
         {
@@ -250,7 +248,7 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
                     .options(MqttOptionsConfig::builder)
                         .topic()
                             .name(topic)
-                            .content(JsonModelConfig::builder)
+                            .content(JsonValidatorConfig::builder)
                                 .catalog()
                                     .name(INLINE_CATALOG_NAME)
                                     .inject(cataloged -> injectJsonSchemas(cataloged, messages, APPLICATION_JSON))
@@ -289,8 +287,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return cataloged;
     }
 
-    private <C> BindingConfigBuilder<C> injectMqttServerRoutes(
-        BindingConfigBuilder<C> binding)
+    private BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> injectMqttServerRoutes(
+        BindingConfigBuilder<NamespaceConfigBuilder<NamespaceConfig>> binding)
     {
         for (Map.Entry<String, Channel> entry : asyncApi.channels.entrySet())
         {
@@ -313,8 +311,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return binding;
     }
 
-    private <C> NamespaceConfigBuilder<C> injectTlsClient(
-        NamespaceConfigBuilder<C> namespace)
+    private NamespaceConfigBuilder<NamespaceConfig> injectTlsClient(
+        NamespaceConfigBuilder<NamespaceConfig> namespace)
     {
         if (isTlsEnabled)
         {
@@ -336,8 +334,8 @@ public class AsyncApiMqttProxyConfigGenerator extends AsyncApiConfigGenerator
         return namespace;
     }
 
-    private <C> NamespaceConfigBuilder<C> injectVaults(
-        NamespaceConfigBuilder<C> namespace)
+    private NamespaceConfigBuilder<NamespaceConfig> injectVaults(
+        NamespaceConfigBuilder<NamespaceConfig> namespace)
     {
         if (isTlsEnabled)
         {

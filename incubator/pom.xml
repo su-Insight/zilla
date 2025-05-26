@@ -18,22 +18,14 @@
 
   <modules>
     <module>binding-amqp.spec</module>
-    <module>binding-asyncapi.spec</module>
-    <module>binding-openapi.spec</module>
-    <module>binding-openapi-asyncapi.spec</module>
     <module>catalog-inline.spec</module>
     <module>catalog-schema-registry.spec</module>
     <module>exporter-otlp.spec</module>
-    <module>exporter-stdout.spec</module>
-    <module>model-avro.spec</module>
-    <module>model-core.spec</module>
-    <module>model-json.spec</module>
-    <module>model-protobuf.spec</module>
+    <module>validator-avro.spec</module>
+    <module>validator-core.spec</module>
+    <module>validator-json.spec</module>
 
     <module>binding-amqp</module>
-    <module>binding-asyncapi</module>
-    <module>binding-openapi</module>
-    <module>binding-openapi-asyncapi</module>
 
     <module>catalog-inline</module>
     <module>catalog-schema-registry</module>
@@ -44,12 +36,10 @@
     <module>command-tune</module>
 
     <module>exporter-otlp</module>
-    <module>exporter-stdout</module>
 
-    <module>model-avro</module>
-    <module>model-core</module>
-    <module>model-json</module>
-    <module>model-protobuf</module>
+    <module>validator-avro</module>
+    <module>validator-core</module>
+    <module>validator-json</module>
   </modules>
 
   <dependencyManagement>
@@ -57,21 +47,6 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>binding-amqp</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>binding-asyncapi</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>binding-openapi</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>binding-openapi-asyncapi</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -111,27 +86,17 @@
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
-        <artifactId>exporter-stdout</artifactId>
+        <artifactId>validator-avro</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
-        <artifactId>model-avro</artifactId>
+        <artifactId>validator-core</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
-        <artifactId>model-core</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>model-json</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>model-protobuf</artifactId>
+        <artifactId>validator-json</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

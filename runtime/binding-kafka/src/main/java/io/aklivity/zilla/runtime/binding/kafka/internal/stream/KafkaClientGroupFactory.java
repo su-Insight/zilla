@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.LongFunction;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -45,7 +44,6 @@ import org.agrona.collections.Object2ObjectHashMap;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaSaslConfig;
-import io.aklivity.zilla.runtime.binding.kafka.config.KafkaServerConfig;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaBinding;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaConfiguration;
 import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaBindingConfig;
@@ -62,8 +60,6 @@ import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.config.Descr
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.config.ResourceRequestFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.config.ResourceResponseFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerAssignmentMetadataFW;
-import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerAssignmentTopicUserdataFW;
-import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerAssignmentTopicsUserdataFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerAssignmentUserdataFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerMetadataTopicFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.consumer.ConsumerPartitionFW;
@@ -96,6 +92,7 @@ import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.EndFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.ExtensionFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.FlushFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.KafkaBeginExFW;
+import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.KafkaDataExFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.KafkaFlushExFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.KafkaGroupBeginExFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.stream.KafkaGroupFlushExFW;
@@ -120,7 +117,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
     private static final short ERROR_EXISTS = -1;
     private static final short ERROR_NONE = 0;
 
-    private static final short ERROR_COORDINATOR_LOAD_IN_PROGRESS = 14;
     private static final short ERROR_COORDINATOR_NOT_AVAILABLE = 15;
     private static final short ERROR_NOT_COORDINATOR_FOR_CONSUMER = 16;
     private static final short ERROR_UNKNOWN_MEMBER = 25;
@@ -172,6 +168,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
     private final ResetFW.Builder resetRW = new ResetFW.Builder();
     private final WindowFW.Builder windowRW = new WindowFW.Builder();
     private final KafkaBeginExFW.Builder kafkaBeginExRW = new KafkaBeginExFW.Builder();
+    private final KafkaDataExFW.Builder kafkaDataExRW = new KafkaDataExFW.Builder();
     private final KafkaFlushExFW.Builder kafkaFlushExRW = new KafkaFlushExFW.Builder();
     private final KafkaResetExFW.Builder kafkaResetExRW = new KafkaResetExFW.Builder();
     private final ProxyBeginExFW.Builder proxyBeginExRW = new ProxyBeginExFW.Builder();
@@ -198,9 +195,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         new ConsumerSubscriptionUserdataFW.Builder();
     private final ConsumerAssignmentUserdataFW.Builder assignmentUserdataRW =
         new ConsumerAssignmentUserdataFW.Builder();
-
-    private final ConsumerAssignmentTopicsUserdataFW.Builder assignmentTopicsUserdataRW =
-        new ConsumerAssignmentTopicsUserdataFW.Builder();
     private final Array32FW<MemberAssignmentFW> memberAssignmentRO =
         new Array32FW<>(new MemberAssignmentFW());
 
@@ -225,8 +219,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
     private final ConsumerTopicPartitionFW topicPartitionRO = new ConsumerTopicPartitionFW();
     private final ConsumerPartitionFW partitionRO = new ConsumerPartitionFW();
     private final Array32FW<ConsumerAssignmentFW> assignmentConsumersRO = new Array32FW<>(new ConsumerAssignmentFW());
-    private final ConsumerAssignmentTopicsUserdataFW assignmentTopicsUserdataRO =
-        new ConsumerAssignmentTopicsUserdataFW();
     private final KafkaGroupMemberMetadataFW kafkaMemberMetadataRO = new KafkaGroupMemberMetadataFW();
 
     private final KafkaDescribeClientDecoder decodeSaslHandshakeResponse = this::decodeSaslHandshakeResponse;
@@ -274,12 +266,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
     private final int proxyTypeId;
     private final MutableDirectBuffer writeBuffer;
     private final MutableDirectBuffer extBuffer;
-    private final MutableDirectBuffer userdataBuffer;
     private final BufferPool decodePool;
     private final BufferPool encodePool;
     private final Signaler signaler;
     private final BindingHandler streamFactory;
-    private final UnaryOperator<KafkaSaslConfig> resolveSasl;
     private final LongFunction<KafkaBindingConfig> supplyBinding;
     private final Supplier<String> supplyInstanceId;
     private final LongFunction<BudgetDebitor> supplyDebitor;
@@ -289,7 +279,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
     private final Duration rebalanceTimeout;
     private final String groupMinSessionTimeoutDefault;
     private final String groupMaxSessionTimeoutDefault;
-    private final int encodeMaxBytes;
 
     public KafkaClientGroupFactory(
         KafkaConfiguration config,
@@ -297,9 +286,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         LongFunction<KafkaBindingConfig> supplyBinding,
         LongFunction<BudgetDebitor> supplyDebitor,
         Signaler signaler,
-        BindingHandler streamFactory,
-        UnaryOperator<KafkaSaslConfig> resolveSasl,
-        LongFunction<KafkaClientRoute> supplyClientRoute)
+        BindingHandler streamFactory)
     {
         super(config, context);
         this.rebalanceTimeout = config.clientGroupRebalanceTimeout();
@@ -308,20 +295,17 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         this.proxyTypeId = context.supplyTypeId("proxy");
         this.writeBuffer = new UnsafeBuffer(new byte[context.writeBuffer().capacity()]);
         this.extBuffer = new UnsafeBuffer(new byte[context.writeBuffer().capacity()]);
-        this.userdataBuffer = new UnsafeBuffer(new byte[context.writeBuffer().capacity()]);
         this.decodePool = context.bufferPool();
         this.encodePool = context.bufferPool();
         this.supplyBinding = supplyBinding;
         this.supplyDebitor = supplyDebitor;
         this.signaler = signaler;
         this.streamFactory = streamFactory;
-        this.resolveSasl = resolveSasl;
         this.instanceIds = new Long2ObjectHashMap<>();
         this.groupStreams = new Object2ObjectHashMap<>();
         this.configs = new LinkedHashMap<>();
         this.groupMinSessionTimeoutDefault = String.valueOf(config.clientGroupMinSessionTimeoutDefault());
         this.groupMaxSessionTimeoutDefault = String.valueOf(config.clientGroupMaxSessionTimeoutDefault());
-        this.encodeMaxBytes = encodePool.slotCapacity() - GROUP_RECORD_FRAME_MAX_SIZE;
     }
 
     @Override
@@ -361,8 +345,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             if (resolved != null)
             {
                 final long resolvedId = resolved.id;
-                final List<KafkaServerConfig> servers = binding.servers();
-                final KafkaSaslConfig sasl = resolveSasl.apply(binding.sasl());
+                final KafkaSaslConfig sasl = binding.sasl();
 
                 final GroupMembership groupMembership = instanceIds.get(binding.id);
                 assert groupMembership != null;
@@ -382,7 +365,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                         protocol,
                         timeout,
                         groupMembership,
-                        servers,
                         sasl);
                     newStream = newGroup::onStream;
 
@@ -771,42 +753,50 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                     final ResourceResponseFW resource = resourceResponseRO.tryWrap(buffer, progress, limit);
                     if (resource == null)
                     {
+                        client.decoder = decodeIgnoreAll;
                         break decode;
                     }
 
                     progress = resource.limit();
 
                     final String resourceName = resource.name().asString();
-                    final short errorCode = resource.errorCode();
+                    final int resourceError = resource.errorCode();
 
-                    if (errorCode != ERROR_NONE || !client.delegate.nodeId.equals(resourceName))
+                    client.onDecodeResource(traceId, client.authorization, resourceError, resourceName);
+                    // TODO: use different decoder for configs
+                    if (resourceError != ERROR_NONE || !client.delegate.nodeId.equals(resourceName))
                     {
-                        client.onDecodeResource(traceId, client.authorization, errorCode, resourceName);
+                        client.decoder = decodeIgnoreAll;
+                        break decode;
                     }
-                    else
+
+                    final int configCount = resource.configCount();
+                    configs.clear();
+                    for (int configIndex = 0; configIndex < configCount; configIndex++)
                     {
-                        final int configCount = resource.configCount();
-                        configs.clear();
-                        for (int configIndex = 0; configIndex < configCount; configIndex++)
+                        final ConfigResponseFW config = configResponseRO.tryWrap(buffer, progress, limit);
+                        if (config == null)
                         {
-                            final ConfigResponseFW config = configResponseRO.tryWrap(buffer, progress, limit);
-                            if (config == null)
-                            {
-                                break decode;
-                            }
-
-                            progress = config.limit();
-
-                            final String name = config.name().asString();
-                            final String value = config.value().asString();
-
-                            configs.put(name, value);
+                            client.decoder = decodeIgnoreAll;
+                            break decode;
                         }
 
-                        client.onDecodeDescribeResponse(traceId, configs);
+                        progress = config.limit();
+
+                        final String name = config.name().asString();
+                        final String value = config.value().asString();
+
+                        configs.put(name, value);
                     }
+
+                    client.onDecodeDescribeResponse(traceId, configs);
                 }
             }
+        }
+
+        if (client.decoder == decodeIgnoreAll)
+        {
+            client.cleanupNetwork(traceId);
         }
 
         return progress;
@@ -866,10 +856,8 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 progress = findCoordinatorResponse.limit();
 
-                final short errorCode = findCoordinatorResponse.errorCode();
-                switch (errorCode)
+                switch (findCoordinatorResponse.errorCode())
                 {
-                case ERROR_COORDINATOR_LOAD_IN_PROGRESS:
                 case ERROR_COORDINATOR_NOT_AVAILABLE:
                     client.onCoordinatorNotAvailable(traceId, authorization);
                     break;
@@ -878,14 +866,16 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                         findCoordinatorResponse.host(), findCoordinatorResponse.port());
                     break;
                 default:
-                    client.onDecodeResponseErrorCode(traceId, client.originId, FIND_COORDINATOR_API_KEY,
-                        FIND_COORDINATOR_API_VERSION, errorCode);
-                    client.errorCode = errorCode;
-                    client.decoder = decodeClusterReject;
+                    client.decoder = decodeClusterIgnoreAll;
                     break;
                 }
 
             }
+        }
+
+        if (client.decoder == decodeClusterIgnoreAll)
+        {
+            client.onError(traceId);
         }
 
         return progress;
@@ -903,7 +893,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         int progress,
         int limit)
     {
-        client.onNetworkError(traceId);
+        client.doNetworkReset(traceId);
         client.decoder = decodeClusterIgnoreAll;
         return limit;
     }
@@ -919,7 +909,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         int progress,
         int limit)
     {
-        client.onNetworkError(traceId);
+        client.doNetworkReset(traceId);
         client.decoder = decodeCoordinatorIgnoreAll;
         return limit;
     }
@@ -1014,12 +1004,15 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                         joinGroupResponse.memberId().asString());
                     break;
                 default:
-                    client.onDecodeResponseErrorCode(traceId, client.originId, JOIN_GROUP_API_KEY, JOIN_GROUP_VERSION, errorCode);
-                    client.errorCode = errorCode;
-                    client.decoder = decodeCoordinatorReject;
+                    client.decoder = decodeCoordinatorIgnoreAll;
                     break;
                 }
             }
+        }
+
+        if (client.decoder == decodeCoordinatorIgnoreAll)
+        {
+            client.onNetworkError(traceId);
         }
 
         return progress;
@@ -1058,6 +1051,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 final short errorCode = syncGroupResponse != null ? syncGroupResponse.errorCode() : ERROR_EXISTS;
 
+
                 if (syncGroupResponse == null)
                 {
                     break decode;
@@ -1074,12 +1068,15 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                     client.onSyncGroupResponse(traceId, authorization, syncGroupResponse.assignment());
                     break;
                 default:
-                    client.onDecodeResponseErrorCode(traceId, client.originId, SYNC_GROUP_API_KEY, SYNC_GROUP_VERSION, errorCode);
-                    client.errorCode = errorCode;
-                    client.decoder = decodeCoordinatorReject;
+                    client.decoder = decodeCoordinatorIgnoreAll;
                     break;
                 }
             }
+        }
+
+        if (client.decoder == decodeCoordinatorIgnoreAll)
+        {
+            client.onNetworkError(traceId);
         }
 
         return progress;
@@ -1123,9 +1120,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 progress = heartbeatResponse.limit();
 
-                final short errorCode = heartbeatResponse.errorCode();
-
-                switch (errorCode)
+                switch (heartbeatResponse.errorCode())
                 {
                 case ERROR_UNKNOWN_MEMBER:
                     client.onJoinGroupMemberIdError(traceId, authorization, UNKNOWN_MEMBER_ID);
@@ -1137,12 +1132,15 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                     client.onHeartbeatResponse(traceId, authorization);
                     break;
                 default:
-                    client.onDecodeResponseErrorCode(traceId, client.originId, HEARTBEAT_API_KEY, HEARTBEAT_VERSION, errorCode);
-                    client.errorCode = errorCode;
-                    client.decoder = decodeCoordinatorReject;
+                    client.decoder = decodeCoordinatorIgnoreAll;
                     break;
                 }
             }
+        }
+
+        if (client.decoder == decodeCoordinatorIgnoreAll)
+        {
+            client.onNetworkError(traceId);
         }
 
         return progress;
@@ -1183,30 +1181,17 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 {
                     break decode;
                 }
-
-                progress = leaveGroupResponse.limit();
-
-                final short errorCode = leaveGroupResponse.errorCode();
-                if (errorCode == ERROR_NONE)
+                else
                 {
+                    progress = leaveGroupResponse.limit();
+
                     members:
                     for (int i = 0; i < leaveGroupResponse.memberCount(); i++)
                     {
                         final LeaveMemberResponseFW member = leaveMemberResponseRO.tryWrap(buffer, progress, limit);
                         if (member != null)
                         {
-                            final short memberErrorCode = member.errorCode();
-                            if (memberErrorCode == ERROR_NONE)
-                            {
-                                progress = member.limit();
-                            }
-                            else
-                            {
-                                client.onDecodeResponseErrorCode(traceId, client.originId, LEAVE_GROUP_API_KEY,
-                                    LEAVE_GROUP_VERSION, errorCode);
-                                client.errorCode = errorCode;
-                                client.decoder = decodeCoordinatorReject;
-                            }
+                            progress = member.limit();
                         }
                         else
                         {
@@ -1216,14 +1201,12 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                     client.onLeaveGroupResponse(traceId, authorization);
                 }
-                else
-                {
-                    client.onDecodeResponseErrorCode(traceId, client.originId, LEAVE_GROUP_API_KEY, LEAVE_GROUP_VERSION,
-                        errorCode);
-                    client.errorCode = errorCode;
-                    client.decoder = decodeCoordinatorReject;
-                }
             }
+        }
+
+        if (client.decoder == decodeCoordinatorIgnoreAll)
+        {
+            client.onNetworkError(traceId);
         }
 
         return progress;
@@ -1231,14 +1214,19 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
     private final class KafkaGroupStream
     {
-        private final ClusterClient cluster;
+        private final ClusterClient clusterClient;
+        private final DescribeClient describeClient;
+        private final CoordinatorClient coordinatorClient;
         private final GroupMembership groupMembership;
         private final String groupId;
         private final String protocol;
+        private final long resolvedId;
+        private final int encodeMaxBytes;
 
-        private KafkaGroupClient client;
         private MessageConsumer sender;
+        private String host;
         private String nodeId;
+        private int port;
         private int timeout;
         private MutableDirectBuffer metadataBuffer;
 
@@ -1273,7 +1261,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             String protocol,
             int timeout,
             GroupMembership groupMembership,
-            List<KafkaServerConfig> servers,
             KafkaSaslConfig sasl)
         {
             this.sender = sender;
@@ -1285,10 +1272,13 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             this.groupId = groupId;
             this.protocol = protocol;
             this.timeout = timeout;
+            this.resolvedId = resolvedId;
             this.groupMembership = groupMembership;
-            this.cluster = new ClusterClient(routedId, resolvedId, servers, sasl, this);
-            this.client = cluster;
+            this.clusterClient = new ClusterClient(routedId, resolvedId, sasl, this);
+            this.describeClient = new DescribeClient(routedId, resolvedId, sasl, this);
+            this.coordinatorClient = new CoordinatorClient(routedId, resolvedId, sasl, this);
             this.metadataBuffer = new UnsafeBuffer(new byte[2048]);
+            this.encodeMaxBytes = encodePool.slotCapacity() - GROUP_RECORD_FRAME_MAX_SIZE;
         }
 
         private void onStream(
@@ -1356,7 +1346,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             state = KafkaState.openingInitial(state);
 
-            cluster.doNetworkBegin(traceId, authorization, affinity);
+            clusterClient.doNetworkBeginIfNecessary(traceId, authorization, affinity);
 
             doStreamWindow(traceId, 0, encodeMaxBytes);
         }
@@ -1381,11 +1371,12 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             if (initialSeq > initialAck + initialMax)
             {
-                client.onStreamError(traceId, authorization, ERROR_EXISTS);
+                cleanupStream(traceId, ERROR_EXISTS);
+                coordinatorClient.cleanupNetwork(traceId, authorization);
             }
             else
             {
-                client.onStreamData(traceId, budgetId, payload);
+                coordinatorClient.doSyncGroupRequest(traceId, budgetId, payload);
             }
 
             doStreamWindow(traceId, 0, encodeMaxBytes);
@@ -1395,10 +1386,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             EndFW end)
         {
             final long traceId = end.traceId();
+            final long authorization = end.authorization();
 
             state = KafkaState.closingInitial(state);
-
-            client.onStreamEnd(traceId);
+            coordinatorClient.doLeaveGroupRequest(traceId);
         }
 
         private void onStreamFlush(
@@ -1407,7 +1398,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             final long sequence = flush.sequence();
             final long acknowledge = flush.acknowledge();
             final long traceId = flush.traceId();
-            final long budgetId = flush.budgetId();
+            final long authorizationId = flush.authorization();
             final int reserved = flush.reserved();
             final OctetsFW extension = flush.extension();
 
@@ -1442,21 +1433,27 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                     }
                 });
 
+                coordinatorClient.doJoinGroupRequest(traceId);
             }
-
-            client.onStreamFlush(traceId, budgetId, extension);
+            else
+            {
+                coordinatorClient.doHeartbeatRequest(traceId);
+            }
         }
 
         private void onStreamAbort(
             AbortFW abort)
         {
             final long traceId = abort.traceId();
+            final long authorization = abort.authorization();
 
             state = KafkaState.closedInitial(state);
 
-            client.doNetworkAbort(traceId);
+            clusterClient.doNetworkAbort(traceId);
+            describeClient.doNetworkAbort(traceId);
+            coordinatorClient.doNetworkAbort(traceId);
 
-            cleanupStream(traceId, ERROR_EXISTS);
+            cleanupStream(traceId, ERROR_NONE);
         }
 
         private void onStreamWindow(
@@ -1488,7 +1485,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             state = KafkaState.closedReply(state);
 
-            client.doNetworkReset(traceId);
+            clusterClient.doNetworkReset(traceId);
+            describeClient.doNetworkReset(traceId);
+            coordinatorClient.doNetworkReset(traceId);
         }
 
         private boolean isStreamReplyOpen()
@@ -1498,19 +1497,17 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
         private void doStreamBeginIfNecessary(
             long traceId,
-            long authorization,
-            KafkaServerConfig server)
+            long authorization)
         {
             if (!KafkaState.replyOpening(state))
             {
-                doStreamBegin(traceId, authorization, server);
+                doStreamBegin(traceId, authorization);
             }
         }
 
         private void doStreamBegin(
             long traceId,
-            long authorization,
-            KafkaServerConfig server)
+            long authorization)
         {
             state = KafkaState.openingReply(state);
 
@@ -1521,8 +1518,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                         .groupId(groupId)
                         .protocol(protocol)
                         .instanceId(groupMembership.instanceId)
-                        .host(server.host)
-                        .port(server.port)
                         .timeout(timeout))
                     .build();
 
@@ -1537,7 +1532,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             int offset,
             int length)
         {
-            final int reserved = length + replyPad;
+            final int reserved = replyPad;
 
             if (length > 0)
             {
@@ -1608,7 +1603,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 state = KafkaState.openedInitial(state);
 
                 doWindow(sender, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, cluster.authorization, 0L, GROUP_RECORD_FRAME_MAX_SIZE);
+                    traceId, clusterClient.authorization, 0L, GROUP_RECORD_FRAME_MAX_SIZE);
             }
         }
 
@@ -1619,7 +1614,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             state = KafkaState.closedInitial(state);
 
             doReset(sender, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, cluster.authorization, extension);
+                    traceId, clusterClient.authorization, extension);
         }
 
         private void doStreamAbortIfNecessary(
@@ -1645,8 +1640,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             long traceId,
             long authorization)
         {
-            client = cluster;
-            client.doNetworkBegin(traceId, authorization, affinity);
+            clusterClient.doNetworkBeginIfNecessary(traceId, authorization, affinity);
         }
 
         private void onLeaveGroup(
@@ -1703,72 +1697,11 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 state = 0;
             }
 
-            client.onStreamMigrate(traceId);
+            coordinatorClient.doJoinGroupRequest(traceId);
         }
     }
 
-    private abstract class KafkaGroupClient extends KafkaSaslClient
-    {
-        protected KafkaGroupClient(
-            KafkaServerConfig server,
-            KafkaSaslConfig sasl,
-            long originId,
-            long routedId)
-        {
-            super(server, sasl, originId, routedId);
-        }
-
-        protected abstract void doNetworkBegin(
-            long traceId,
-            long authorization,
-            long affinity);
-
-        protected abstract void doNetworkAbort(
-            long traceId);
-
-        protected abstract void doNetworkReset(
-            long traceId);
-
-        protected KafkaGroupClient(
-            List<KafkaServerConfig> servers,
-            KafkaSaslConfig sasl,
-            long originId,
-            long routedId)
-        {
-            super(servers, sasl, originId, routedId);
-        }
-
-        protected void onStreamMigrate(
-            long traceId)
-        {
-        }
-
-        protected void onStreamData(
-            long traceId,
-            long budgetId,
-            OctetsFW payload)
-        {
-        }
-
-        protected void onStreamFlush(
-            long traceId,
-            long budgetId,
-            OctetsFW extension)
-        {
-        }
-
-        protected void onStreamEnd(
-            long traceId)
-        {
-        }
-
-        protected abstract void onStreamError(
-            long traceId,
-            long authorization,
-            int error);
-    }
-
-    private final class ClusterClient extends KafkaGroupClient
+    private final class ClusterClient extends KafkaSaslClient
     {
         private final LongLongConsumer encodeSaslHandshakeRequest = this::doEncodeSaslHandshakeRequest;
         private final LongLongConsumer encodeSaslAuthenticateRequest = this::doEncodeSaslAuthenticateRequest;
@@ -1795,11 +1728,11 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
+        private long encodeSlotTraceId;
 
         private int decodeSlot = NO_SLOT;
         private int decodeSlotOffset;
         private int decodeSlotReserved;
-        private short errorCode = ERROR_EXISTS;
 
         private int nextResponseId;
 
@@ -1810,11 +1743,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         ClusterClient(
             long originId,
             long routedId,
-            List<KafkaServerConfig> servers,
             KafkaSaslConfig sasl,
             KafkaGroupStream delegate)
         {
-            super(servers, sasl, originId, routedId);
+            super(sasl, originId, routedId);
 
             this.encoder = sasl != null ? encodeSaslHandshakeRequest : encodeFindCoordinatorRequest;
             this.delegate = delegate;
@@ -1892,7 +1824,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             if (replySeq > replyAck + replyMax)
             {
-                onNetworkError(traceId);
+                onError(traceId);
             }
             else
             {
@@ -1903,7 +1835,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (decodeSlot == NO_SLOT)
                 {
-                    onNetworkError(traceId);
+                    onError(traceId);
                 }
                 else
                 {
@@ -1941,7 +1873,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             state = KafkaState.closedReply(state);
 
-            onNetworkError(traceId);
+            onError(traceId);
         }
 
         private void onNetworkReset(
@@ -1951,7 +1883,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             state = KafkaState.closedInitial(state);
 
-            onNetworkError(traceId);
+            onError(traceId);
         }
 
         private void onNetworkWindow(
@@ -2018,8 +1950,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             }
         }
 
-        @Override
-        protected void doNetworkBegin(
+        private void doNetworkBeginIfNecessary(
             long traceId,
             long authorization,
             long affinity)
@@ -2035,32 +1966,24 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             if (!KafkaState.initialOpening(state))
             {
-                assert state == 0;
-
-                this.initialId = supplyInitialId.applyAsLong(routedId);
-                this.replyId = supplyReplyId.applyAsLong(initialId);
-
-                state = KafkaState.openingInitial(state);
-
-                Consumer<OctetsFW.Builder> extension = EMPTY_EXTENSION;
-
-                if (server != null)
-                {
-                    extension =  e -> e.set((b, o, l) -> proxyBeginExRW.wrap(b, o, l)
-                        .typeId(proxyTypeId)
-                        .address(a -> a.inet(i -> i.protocol(p -> p.set(STREAM))
-                            .source("0.0.0.0")
-                            .destination(server.host)
-                            .sourcePort(0)
-                            .destinationPort(server.port)))
-                        .infos(i -> i.item(ii -> ii.authority(server.host)))
-                        .build()
-                        .sizeof());
-                }
-
-                network = newStream(this::onNetwork, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, authorization, affinity, extension);
+                doNetworkBegin(traceId, authorization, affinity);
             }
+        }
+
+        private void doNetworkBegin(
+            long traceId,
+            long authorization,
+            long affinity)
+        {
+            assert state == 0;
+
+            this.initialId = supplyInitialId.applyAsLong(routedId);
+            this.replyId = supplyReplyId.applyAsLong(initialId);
+
+            state = KafkaState.openingInitial(state);
+
+            network = newStream(this::onNetwork, originId, routedId, initialId, initialSeq, initialAck, initialMax,
+                traceId, authorization, affinity, EMPTY_EXTENSION);
         }
 
         @Override
@@ -2076,6 +1999,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 final MutableDirectBuffer encodeBuffer = encodePool.buffer(encodeSlot);
                 encodeBuffer.putBytes(encodeSlotOffset, buffer, offset, limit - offset);
                 encodeSlotOffset += limit - offset;
+                encodeSlotTraceId = traceId;
 
                 buffer = encodeBuffer;
                 offset = 0;
@@ -2101,8 +2025,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             cleanupBudgetIfNecessary();
         }
 
-        @Override
-        protected void doNetworkAbort(
+        private void doNetworkAbort(
             long traceId)
         {
             if (!KafkaState.initialClosed(state))
@@ -2116,8 +2039,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             cleanupBudgetIfNecessary();
         }
 
-        @Override
-        protected void doNetworkReset(
+        private void doNetworkReset(
             long traceId)
         {
             if (!KafkaState.replyClosed(state))
@@ -2151,25 +2073,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 doWindow(network, originId, routedId, replyId, replySeq, replyAck, replyMax,
                     traceId, authorization, budgetId, minReplyPad);
             }
-        }
-
-        @Override
-        protected void onStreamFlush(
-            long traceId,
-            long budgetId,
-            OctetsFW extension)
-        {
-            doEncodeRequestIfNecessary(traceId, budgetId);
-        }
-
-        @Override
-        protected void onStreamError(
-            long traceId,
-            long authorization,
-            int error)
-        {
-            delegate.cleanupStream(traceId, error);
-            cleanupNetwork(traceId, authorization);
         }
 
         private void doEncodeRequestIfNecessary(
@@ -2235,8 +2138,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             int limit)
         {
             final int length = limit - offset;
+            final int lengthMin = Math.min(length, 1024);
             final int initialBudget = Math.max(initialMax - (int)(initialSeq - initialAck), 0);
             final int reservedMax = Math.max(Math.min(length + initialPad, initialBudget), initialMin);
+            final int reservedMin = Math.max(Math.min(lengthMin + initialPad, reservedMax), initialMin);
 
             int reserved = reservedMax;
 
@@ -2248,7 +2153,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (initialDebIndex != NO_DEBITOR_INDEX)
                 {
-                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reservedMax, reservedMax, 0);
+                    final int lengthMax = Math.min(reserved - initialPad, length);
+                    final int deferredMax = length - lengthMax;
+                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reservedMin, reserved, deferredMax);
                     claimed = reserved > 0;
                 }
 
@@ -2276,7 +2183,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (encodeSlot == NO_SLOT)
                 {
-                    onNetworkError(traceId);
+                    onError(traceId);
                 }
                 else
                 {
@@ -2317,7 +2224,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (decodeSlot == NO_SLOT)
                 {
-                    onNetworkError(traceId);
+                    onError(traceId);
                 }
                 else
                 {
@@ -2448,14 +2355,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             nextResponseId++;
 
             delegate.nodeId = String.valueOf(nodeId);
+            delegate.host = host.asString();
+            delegate.port = port;
 
-            KafkaServerConfig server = KafkaServerConfig.builder()
-                .host(host.asString())
-                .port(port)
-                .build();
-            delegate.client = new DescribeClient(originId, routedId, server, sasl, delegate);
-
-            delegate.client.doNetworkBegin(traceId, authorization, 0);
+            delegate.describeClient.doNetworkBegin(traceId, authorization, 0);
 
             cleanupNetwork(traceId, authorization);
         }
@@ -2468,13 +2371,13 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             doNetworkReset(traceId);
         }
 
-        private void onNetworkError(
+        private void onError(
             long traceId)
         {
             doNetworkAbort(traceId);
             doNetworkReset(traceId);
 
-            delegate.cleanupStream(traceId, errorCode);
+            delegate.cleanupStream(traceId, ERROR_EXISTS);
         }
 
         private void cleanupDecodeSlotIfNecessary()
@@ -2495,6 +2398,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 encodePool.release(encodeSlot);
                 encodeSlot = NO_SLOT;
                 encodeSlotOffset = 0;
+                encodeSlotTraceId = 0;
             }
         }
 
@@ -2502,13 +2406,13 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         {
             if (initialDebIndex != NO_DEBITOR_INDEX)
             {
-                initialDeb.release(initialDebIndex, initialId);
+                initialDeb.release(initialDebIndex, initialBudgetId);
                 initialDebIndex = NO_DEBITOR_INDEX;
             }
         }
     }
 
-    private final class DescribeClient extends KafkaGroupClient
+    private final class DescribeClient extends KafkaSaslClient
     {
         private final LongLongConsumer encodeSaslHandshakeRequest = this::doEncodeSaslHandshakeRequest;
         private final LongLongConsumer encodeSaslAuthenticateRequest = this::doEncodeSaslAuthenticateRequest;
@@ -2550,11 +2454,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         DescribeClient(
             long originId,
             long routedId,
-            KafkaServerConfig server,
             KafkaSaslConfig sasl,
             KafkaGroupStream delegate)
         {
-            super(server, sasl, originId, routedId);
+            super(sasl, originId, routedId);
             this.configs = new LinkedHashMap<>();
             this.delegate = delegate;
 
@@ -2568,7 +2471,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         public void onDecodeResource(
             long traceId,
             long authorization,
-            short errorCode,
+            int errorCode,
             String resource)
         {
             switch (errorCode)
@@ -2577,18 +2480,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 assert resource.equals(delegate.nodeId);
                 break;
             default:
-                onDecodeResponseErrorCode(traceId, originId, errorCode);
-                onNetworkError(traceId, errorCode);
+                delegate.cleanupStream(traceId, errorCode);
+                doNetworkEnd(traceId, authorization);
                 break;
             }
-        }
-
-        private void onDecodeResponseErrorCode(
-            long traceId,
-            long originId,
-            int errorCode)
-        {
-            super.onDecodeResponseErrorCode(traceId, originId, DESCRIBE_CONFIGS_API_KEY, DESCRIBE_CONFIGS_API_VERSION, errorCode);
         }
 
         private void onNetwork(
@@ -2787,8 +2682,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             }
         }
 
-        @Override
-        protected void doNetworkBegin(
+        private void doNetworkBegin(
             long traceId,
             long authorization,
             long affinity)
@@ -2807,24 +2701,8 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             state = KafkaState.openingInitial(state);
 
-            Consumer<OctetsFW.Builder> extension = EMPTY_EXTENSION;
-
-            if (server != null)
-            {
-                extension = e -> e.set((b, o, l) -> proxyBeginExRW.wrap(b, o, l)
-                    .typeId(proxyTypeId)
-                    .address(a -> a.inet(i -> i.protocol(p -> p.set(STREAM))
-                        .source("0.0.0.0")
-                        .destination(server.host)
-                        .sourcePort(0)
-                        .destinationPort(server.port)))
-                    .infos(i -> i.item(ii -> ii.authority(server.host)))
-                    .build()
-                    .sizeof());
-            }
-
             network = newStream(this::onNetwork, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                traceId, authorization, affinity, extension);
+                traceId, authorization, affinity, EMPTY_EXTENSION);
         }
 
         @Override
@@ -2863,8 +2741,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 traceId, authorization, EMPTY_EXTENSION);
         }
 
-        @Override
-        protected void doNetworkAbort(
+        private void doNetworkAbort(
             long traceId)
         {
             if (KafkaState.initialOpening(state) && !KafkaState.initialClosed(state))
@@ -2878,8 +2755,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             cleanupBudgetIfNecessary();
         }
 
-        @Override
-        protected void doNetworkReset(
+        private void doNetworkReset(
             long traceId)
         {
             if (KafkaState.replyOpening(state) && !KafkaState.replyClosed(state))
@@ -2913,16 +2789,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 doWindow(network, originId, routedId, replyId, replySeq, replyAck, replyMax,
                     traceId, authorization, budgetId, minReplyPad);
             }
-        }
-
-        @Override
-        protected void onStreamError(
-            long traceId,
-            long authorization,
-            int error)
-        {
-            delegate.cleanupStream(traceId, error);
-            cleanupNetwork(traceId);
         }
 
         private void doEncodeRequestIfNecessary(
@@ -3009,8 +2875,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             int limit)
         {
             final int length = limit - offset;
+            final int lengthMin = Math.min(length, 1024);
             final int initialBudget = Math.max(initialMax - (int)(initialSeq - initialAck), 0);
             final int reservedMax = Math.max(Math.min(length + initialPad, initialBudget), initialMin);
+            final int reservedMin = Math.max(Math.min(lengthMin + initialPad, reservedMax), initialMin);
 
             int reserved = reservedMax;
 
@@ -3022,7 +2890,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (initialDebIndex != NO_DEBITOR_INDEX)
                 {
-                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reservedMax, reservedMax, 0);
+                    final int lengthMax = Math.min(reserved - initialPad, length);
+                    final int deferredMax = length - lengthMax;
+                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reservedMin, reserved, deferredMax);
                     claimed = reserved > 0;
                 }
 
@@ -3221,10 +3091,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 delegate.timeout = timeoutMax;
             }
 
-            delegate.client = new CoordinatorClient(originId, routedId, server, sasl, delegate);
-            delegate.client.doNetworkBegin(traceId, authorization, 0);
+            delegate.coordinatorClient.doNetworkBeginIfNecessary(traceId, authorization, 0);
 
-            doNetworkEnd(traceId, authorization);
+            cleanupNetwork(traceId);
         }
 
         private void cleanupNetwork(
@@ -3232,14 +3101,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         {
             doNetworkAbort(traceId);
             doNetworkReset(traceId);
-        }
-
-        private void onNetworkError(
-            long traceId,
-            short errorCode)
-        {
-            cleanupNetwork(traceId);
-            delegate.cleanupStream(traceId, errorCode);
         }
 
         private void cleanupDecodeSlotIfNecessary()
@@ -3268,13 +3129,13 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         {
             if (initialDebIndex != NO_DEBITOR_INDEX)
             {
-                initialDeb.release(initialDebIndex, initialId);
+                initialDeb.release(initialDebIndex, initialBudgetId);
                 initialDebIndex = NO_DEBITOR_INDEX;
             }
         }
     }
 
-    private final class CoordinatorClient extends KafkaGroupClient
+    private final class CoordinatorClient extends KafkaSaslClient
     {
         private final LongLongConsumer encodeSaslHandshakeRequest = this::doEncodeSaslHandshakeRequest;
         private final LongLongConsumer encodeSaslAuthenticateRequest = this::doEncodeSaslAuthenticateRequest;
@@ -3293,7 +3154,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         private MessageConsumer network;
         private int state;
         private long authorization;
-        private short errorCode = ERROR_EXISTS;
 
         private long initialSeq;
         private long initialAck;
@@ -3322,11 +3182,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         CoordinatorClient(
             long originId,
             long routedId,
-            KafkaServerConfig server,
             KafkaSaslConfig sasl,
             KafkaGroupStream delegate)
         {
-            super(server, sasl, originId, routedId);
+            super(sasl, originId, routedId);
 
             this.delegate = delegate;
             this.decoder = decodeCoordinatorReject;
@@ -3558,8 +3417,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             }
         }
 
-        @Override
-        protected void doNetworkBegin(
+        private void doNetworkBeginIfNecessary(
             long traceId,
             long authorization,
             long affinity)
@@ -3579,25 +3437,32 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             if (!KafkaState.initialOpening(state))
             {
-                this.initialId = supplyInitialId.applyAsLong(routedId);
-                this.replyId = supplyReplyId.applyAsLong(initialId);
-
-                state = KafkaState.openingInitial(state);
-
-                Consumer<OctetsFW.Builder> extension =  e -> e.set((b, o, l) -> proxyBeginExRW.wrap(b, o, l)
-                    .typeId(proxyTypeId)
-                    .address(a -> a.inet(i -> i.protocol(p -> p.set(STREAM))
-                        .source("0.0.0.0")
-                        .destination(server.host)
-                        .sourcePort(0)
-                        .destinationPort(server.port)))
-                    .infos(i -> i.item(ii -> ii.authority(server.host)))
-                    .build()
-                    .sizeof());
-
-                network = newStream(this::onNetwork, originId, routedId, initialId, initialSeq, initialAck, initialMax,
-                    traceId, authorization, affinity, extension);
+                doNetworkBegin(traceId, authorization, affinity);
             }
+        }
+
+        private void doNetworkBegin(
+            long traceId,
+            long authorization,
+            long affinity)
+        {
+            this.initialId = supplyInitialId.applyAsLong(routedId);
+            this.replyId = supplyReplyId.applyAsLong(initialId);
+
+            state = KafkaState.openingInitial(state);
+
+            Consumer<OctetsFW.Builder> extension =  e -> e.set((b, o, l) -> proxyBeginExRW.wrap(b, o, l)
+                .typeId(proxyTypeId)
+                .address(a -> a.inet(i -> i.protocol(p -> p.set(STREAM))
+                    .source("0.0.0.0")
+                    .destination(delegate.host)
+                    .sourcePort(0)
+                    .destinationPort(delegate.port)))
+                .build()
+                .sizeof());
+
+            network = newStream(this::onNetwork, originId, routedId, initialId, initialSeq, initialAck, initialMax,
+                traceId, authorization, affinity, extension);
         }
 
         @Override
@@ -3642,8 +3507,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
         }
 
-        @Override
-        protected void doNetworkAbort(
+        private void doNetworkAbort(
             long traceId)
         {
             cancelHeartbeat();
@@ -3660,8 +3524,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             cleanupBudgetIfNecessary();
         }
 
-        @Override
-        protected void doNetworkReset(
+        private void doNetworkReset(
             long traceId)
         {
             if (KafkaState.replyOpening(state) && !KafkaState.replyClosed(state))
@@ -3697,61 +3560,11 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             }
         }
 
-
-        @Override
-        protected void onStreamMigrate(
-            long traceId)
-        {
-            doJoinGroupRequest(traceId);
-        }
-
-        @Override
-        protected void onStreamData(
-            long traceId,
-            long budgetId,
-            OctetsFW payload)
-        {
-            doSyncGroupRequest(traceId, budgetId, payload);
-        }
-
-        @Override
-        protected void onStreamFlush(
-            long traceId,
-            long budgetId,
-            OctetsFW extension)
-        {
-            if (extension.sizeof() > 0)
-            {
-                doJoinGroupRequest(traceId);
-            }
-            else
-            {
-                doHeartbeatRequest(traceId);
-            }
-        }
-
-        @Override
-        protected void onStreamEnd(
-            long traceId)
-        {
-            doLeaveGroupRequest(traceId);
-        }
-
-        @Override
-        protected void onStreamError(
-            long traceId,
-            long authorization,
-            int error)
-        {
-            delegate.cleanupStream(traceId, error);
-            cleanupNetwork(traceId, authorization);
-        }
-
         private void doEncodeRequestIfNecessary(
             long traceId,
             long budgetId)
         {
-            if (nextRequestId == nextResponseId && !encoders.isEmpty())
+            if (nextRequestId == nextResponseId)
             {
                 LongLongConsumer encoder = encoders.remove();
                 encoder.accept(traceId, budgetId);
@@ -3819,7 +3632,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
             decoder = decodeJoinGroupResponse;
 
-            delegate.doStreamBeginIfNecessary(traceId, authorization, server);
+            delegate.doStreamBeginIfNecessary(traceId, authorization);
         }
 
         private int doGenerateSubscriptionMetadata()
@@ -3893,7 +3706,6 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
         private int doGenerateAssignmentMetadata(
             Array32FW<TopicAssignmentFW> topicPartitions,
-            ConsumerAssignmentTopicsUserdataFW.Builder assignmentTopicsUserdataRW,
             int progressOffset)
         {
             final MutableDirectBuffer encodeBuffer = extBuffer;
@@ -3930,18 +3742,14 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 });
 
                 Array32FW<ConsumerAssignmentFW> assignmentUserdata = t.userdata();
-                assignmentTopicsUserdataRW.topicsUserdataItem(u -> u
-                    .topic(t.topic())
-                    .userdata(assignmentUserdata.buffer(), assignmentUserdata.offset(), assignmentUserdata.sizeof()));
+                final ConsumerAssignmentUserdataFW userdata = assignmentUserdataRW
+                    .wrap(encodeBuffer, encodeProgress.get(), encodeLimit)
+                    .userdata(assignmentUserdata.buffer(), assignmentUserdata.offset(), assignmentUserdata.sizeof())
+                    .build();
+
+                encodeProgress.set(userdata.limit());
+
             });
-
-            ConsumerAssignmentTopicsUserdataFW topicUserdata = assignmentTopicsUserdataRW.build();
-            final ConsumerAssignmentUserdataFW userdata = assignmentUserdataRW
-                .wrap(encodeBuffer, encodeProgress.get(), encodeLimit)
-                .userdata(topicUserdata.buffer(), topicUserdata.offset(), topicUserdata.sizeof())
-                .build();
-
-            encodeProgress.set(userdata.limit());
 
             return encodeProgress.get();
         }
@@ -3989,11 +3797,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 {
                     Array32FW<TopicAssignmentFW> topicPartitions = a.assignments();
 
-                    assignmentTopicsUserdataRW.wrap(userdataBuffer, assignmentTopicsUserdataRW.limit(),
-                        userdataBuffer.capacity());
-
-                    int newProgressOffset = doGenerateAssignmentMetadata(topicPartitions, assignmentTopicsUserdataRW,
-                        progressOffset.get());
+                    int newProgressOffset = doGenerateAssignmentMetadata(topicPartitions, progressOffset.get());
                     final AssignmentFW memberAssignment =
                         assignmentRW.wrap(encodeBuffer, encodeProgress.get(), encodeLimit)
                             .memberId(a.memberId())
@@ -4163,7 +3967,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             }
             else
             {
-                delegate.doStreamBeginIfNecessary(traceId, authorization, server);
+                delegate.doStreamBeginIfNecessary(traceId, authorization);
             }
         }
 
@@ -4205,8 +4009,10 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             int limit)
         {
             final int length = limit - offset;
+            final int lengthMin = Math.min(length, 1024);
             final int initialBudget = Math.max(initialMax - (int)(initialSeq - initialAck), 0);
             final int reservedMax = Math.max(Math.min(length + initialPad, initialBudget), initialMin);
+            final int reservedMin = Math.max(Math.min(lengthMin + initialPad, reservedMax), initialMin);
 
             int reserved = reservedMax;
 
@@ -4218,7 +4024,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                 if (initialDebIndex != NO_DEBITOR_INDEX)
                 {
-                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reserved, reserved, 0);
+                    final int lengthMax = Math.min(reserved - initialPad, length);
+                    final int deferredMax = length - lengthMax;
+                    reserved = initialDeb.claim(traceId, initialDebIndex, initialId, reservedMin, reserved, deferredMax);
                     claimed = reserved > 0;
                 }
 
@@ -4504,33 +4312,9 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
                 final int limit = newAssignment.sizeof();
 
                 MutableInteger progress = new MutableInteger();
-                MutableInteger userdataProgress = new MutableInteger();
 
                 final ConsumerAssignmentMetadataFW assignment = assignmentMetadataRO.wrap(buffer, progress.get(), limit);
                 progress.set(assignment.limit());
-                userdataProgress.set(assignment.limit());
-
-                for (int i = 0; i < assignment.metadataTopicCount(); i++)
-                {
-                    final ConsumerTopicPartitionFW topicPartition = topicPartitionRO
-                        .wrap(buffer, userdataProgress.get(), limit);
-
-                    userdataProgress.set(topicPartition.limit());
-
-                    int partitionCount = topicPartition.partitionCount();
-                    for (int t = 0; t < partitionCount; t++)
-                    {
-                        ConsumerPartitionFW partition = partitionRO.wrap(buffer, userdataProgress.get(), limit);
-                        userdataProgress.set(partition.limit());
-                    }
-                }
-
-                final ConsumerAssignmentUserdataFW memberUserdata =
-                    assignmentUserdataRO.wrap(buffer, userdataProgress.get(), limit);
-
-                final OctetsFW memberUserdataValue = memberUserdata.userdata();
-                ConsumerAssignmentTopicsUserdataFW assignmentUserdata =
-                    assignmentTopicsUserdataRO.wrap(memberUserdataValue.value(), 0, limit);
 
                 for (int i = 0; i < assignment.metadataTopicCount(); i++)
                 {
@@ -4541,23 +4325,26 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
 
                     topicAssignmentBuilder.item(ta ->
                     {
-                        final String16FW topic = topicPartition.topic();
-                        ta.topic(topic);
+                        ta.topic(topicPartition.topic());
                         int partitionCount = topicPartition.partitionCount();
                         for (int t = 0; t < partitionCount; t++)
                         {
                             ConsumerPartitionFW partition = partitionRO.wrap(buffer, progress.get(), limit);
                             progress.set(partition.limit());
+
                             ta.partitionsItem(p -> p.partitionId(partition.partitionId()));
                         }
 
-                        ConsumerAssignmentTopicUserdataFW consumerAssignmentTopicUserdata =
-                            assignmentUserdata.topicsUserdata().matchFirst(tu -> tu.topic().equals(topic));
+                        ConsumerAssignmentUserdataFW assignmentUserdata =
+                            assignmentUserdataRO.wrap(buffer, progress.get(), limit);
+                        OctetsFW userdata = assignmentUserdata.userdata();
 
-                        final OctetsFW userdata = consumerAssignmentTopicUserdata.userdata();
+                        progress.set(assignmentUserdata.limit());
+
                         assignmentConsumersRO.wrap(userdata.value(), 0, userdata.sizeof());
                         ta.userdata(assignmentConsumersRO);
                     });
+
                 }
 
                 Array32FW<TopicAssignmentFW> topicAssignment = topicAssignmentBuilder.build();
@@ -4633,7 +4420,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
             doNetworkAbort(traceId);
             doNetworkReset(traceId);
 
-            delegate.cleanupStream(traceId, errorCode);
+            delegate.cleanupStream(traceId, ERROR_EXISTS);
         }
 
         private void cancelHeartbeat()
@@ -4671,7 +4458,7 @@ public final class KafkaClientGroupFactory extends KafkaClientSaslHandshaker imp
         {
             if (initialDebIndex != NO_DEBITOR_INDEX)
             {
-                initialDeb.release(initialDebIndex, initialId);
+                initialDeb.release(initialDebIndex, initialBudgetId);
                 initialDebIndex = NO_DEBITOR_INDEX;
             }
         }

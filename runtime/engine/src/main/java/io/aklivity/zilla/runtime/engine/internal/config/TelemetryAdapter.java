@@ -49,13 +49,6 @@ public class TelemetryAdapter implements JsonbAdapter<TelemetryConfig, JsonObjec
         this.exporter = new ExporterAdapter(context);
     }
 
-    public TelemetryAdapter adaptNamespace(
-        String namespace)
-    {
-        exporter.adaptNamespace(namespace);
-        return this;
-    }
-
     @Override
     public JsonObject adaptToJson(
         TelemetryConfig telemetry)

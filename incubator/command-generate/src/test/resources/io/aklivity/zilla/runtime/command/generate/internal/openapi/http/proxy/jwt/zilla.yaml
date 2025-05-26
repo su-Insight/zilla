@@ -25,7 +25,7 @@ bindings:
       - path: /items
         method: POST
         content:
-          model: json
+          type: json
           catalog:
             catalog0:
             - subject: Item

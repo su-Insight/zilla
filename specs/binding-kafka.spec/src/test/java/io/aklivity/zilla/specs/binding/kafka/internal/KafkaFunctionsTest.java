@@ -75,7 +75,6 @@ import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaFlushExF
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaGroupBeginExFW;
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaGroupFlushExFW;
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaGroupMemberMetadataFW;
-import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaInitProducerIdBeginExFW;
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaMergedBeginExFW;
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaMergedFetchDataExFW;
 import io.aklivity.zilla.specs.binding.kafka.internal.types.stream.KafkaMergedFlushExFW;
@@ -132,25 +131,13 @@ public class KafkaFunctionsTest
     {
         byte[] build = KafkaFunctions.memberAssignment()
             .member("memberId-1")
-                .assignment()
-                    .topic("test1")
+               .assignment()
+                .topic("test")
+                .partitionId(0)
+                .consumer()
+                    .id("localhost:9092")
                     .partitionId(0)
-                    .partitionId(1)
-                    .consumer()
-                        .id("consumer-1")
-                        .partitionId(0)
-                        .partitionId(1)
-                        .build()
-                .build()
-                .assignment()
-                    .topic("test1")
-                    .partitionId(0)
-                    .partitionId(1)
-                    .consumer()
-                        .id("consumer-1")
-                        .partitionId(0)
-                        .partitionId(1)
-                        .build()
+                    .build()
                 .build()
             .build()
         .build();
@@ -581,8 +568,6 @@ public class KafkaFunctionsTest
                                         .produce()
                                          .deferred(0)
                                          .timestamp(12345678L)
-                                         .producerId(8L)
-                                         .producerEpoch((short) 2)
                                          .partition(0, 0L)
                                          .key("match")
                                          .hashKey("hashKey")
@@ -1125,27 +1110,6 @@ public class KafkaFunctionsTest
     }
 
     @Test
-    public void shouldGenerateMergedProduceFlushExtension()
-    {
-        byte[] build = KafkaFunctions.flushEx()
-            .typeId(0x01)
-            .merged()
-                .produce()
-                    .hashKey("hashTopic")
-                    .partitionId(0)
-                    .build()
-            .build();
-
-        DirectBuffer buffer = new UnsafeBuffer(build);
-        KafkaFlushExFW flushEx = new KafkaFlushExFW().wrap(buffer, 0, buffer.capacity());
-        assertEquals(0x01, flushEx.typeId());
-
-        assertEquals("hashTopic", flushEx.merged().produce().hashKey()
-            .value()
-            .get((b, o, m) -> b.getStringWithoutLengthUtf8(o, m - o)));
-    }
-
-    @Test
     public void shouldGenerateMergedConsumerFlushExtension()
     {
         byte[] build = KafkaFunctions.flushEx()
@@ -1177,8 +1141,6 @@ public class KafkaFunctionsTest
                                                  .partition(0, 0L)
                                                  .progress(0, 1L)
                                                  .timestamp(12345678L)
-                                                 .producerId(1L)
-                                                 .producerEpoch((short) 1)
                                                  .key("match")
                                                  .header("name", "value")
                                                  .headerNull("name-n")
@@ -1193,8 +1155,6 @@ public class KafkaFunctionsTest
                 .merged(m -> m.produce(mp -> mp
                     .deferred(100)
                     .timestamp(12345678L)
-                    .producerId(1L)
-                    .producerEpoch((short) 1)
                     .partition(p -> p.partitionId(0).partitionOffset(0L))
                     .key(k -> k.length(5)
                         .value(v -> v.set("match".getBytes(UTF_8))))
@@ -1222,9 +1182,6 @@ public class KafkaFunctionsTest
                                                 .fetch()
                                                  .partition(0, 0L, 1L)
                                                  .progress(0, 1L, 1L)
-                                                 .timestamp(12345678L)
-                                                 .producerId(8L)
-                                                 .producerEpoch((short) 2)
                                                  .timestamp(12345678L)
                                                  .key("match")
                                                  .header("name", "value")
@@ -2783,6 +2740,7 @@ public class KafkaFunctionsTest
             .typeId(0x01)
             .produce(f -> f
                 .transaction("transaction")
+                .producerId(1L)
                 .topic("test")
                 .partition(p -> p.partitionId(0).partitionOffset(0L)))
             .build();
@@ -2806,6 +2764,7 @@ public class KafkaFunctionsTest
             .typeId(0x01)
             .produce(f -> f
                 .transaction("transaction")
+                .producerId(1L)
                 .topic("test")
                 .partition(p -> p.partitionId(0).partitionOffset(0L)))
             .build();
@@ -2829,6 +2788,7 @@ public class KafkaFunctionsTest
             .typeId(0x01)
             .produce(f -> f
                 .transaction("transaction")
+                .producerId(1L)
                 .topic("test")
                 .partition(p -> p.partitionId(0).partitionOffset(0L)))
             .build();
@@ -2852,6 +2812,7 @@ public class KafkaFunctionsTest
             .typeId(0x01)
             .produce(f -> f
                 .transaction("transaction")
+                .producerId(1L)
                 .topic("test")
                 .partition(p -> p.partitionId(0).partitionOffset(0L)))
             .build();
@@ -3578,6 +3539,7 @@ public class KafkaFunctionsTest
                                      .typeId(0x01)
                                      .produce()
                                          .transaction("transaction")
+                                         .producerId(1L)
                                          .topic("topic")
                                          .partition(1)
                                          .build()
@@ -3590,6 +3552,7 @@ public class KafkaFunctionsTest
 
         final KafkaProduceBeginExFW produceBeginEx = beginEx.produce();
         assertEquals("transaction", produceBeginEx.transaction().asString());
+        assertEquals(1L, produceBeginEx.producerId());
         assertEquals(1, produceBeginEx.partition().partitionId());
         assertEquals("topic", produceBeginEx.topic().asString());
         assertEquals(-1L, produceBeginEx.partition().partitionOffset());
@@ -3603,8 +3566,6 @@ public class KafkaFunctionsTest
                                      .produce()
                                          .deferred(10)
                                          .timestamp(12345678L)
-                                         .producerId(1L)
-                                         .producerEpoch((short) 2)
                                          .sequence(0)
                                          .ackMode("IN_SYNC_REPLICAS")
                                          .key("match")
@@ -3675,8 +3636,6 @@ public class KafkaFunctionsTest
         BytesMatcher matcher = KafkaFunctions.matchDataEx()
                                              .produce()
                                                  .timestamp(12345678L)
-                                                 .producerId(8L)
-                                                 .producerEpoch((short) 1)
                                                  .build()
                                              .build();
 
@@ -4196,8 +4155,6 @@ public class KafkaFunctionsTest
                 .groupId("test")
                 .protocol("roundrobin")
                 .instanceId("client-1")
-                .host("localhost")
-                .port(9092)
                 .timeout(10)
                 .metadata("test".getBytes())
                 .build()
@@ -4211,9 +4168,6 @@ public class KafkaFunctionsTest
         final KafkaGroupBeginExFW groupBeginEx = beginEx.group();
         assertEquals("test", groupBeginEx.groupId().asString());
         assertEquals("roundrobin", groupBeginEx.protocol().asString());
-        assertEquals("client-1", groupBeginEx.instanceId().asString());
-        assertEquals("localhost", groupBeginEx.host().asString());
-        assertEquals(9092, groupBeginEx.port());
         assertEquals(10, groupBeginEx.timeout());
     }
 
@@ -4225,8 +4179,6 @@ public class KafkaFunctionsTest
             .group()
                 .groupId("test")
                 .protocol("roundrobin")
-                .host("broker1.example.com")
-                .port(9092)
                 .timeout(10)
                 .build()
             .build();
@@ -4239,7 +4191,6 @@ public class KafkaFunctionsTest
         final KafkaGroupBeginExFW groupBeginEx = beginEx.group();
         assertEquals("test", groupBeginEx.groupId().asString());
         assertEquals("roundrobin", groupBeginEx.protocol().asString());
-        assertEquals("broker1.example.com", groupBeginEx.host().asString());
         assertEquals(10, groupBeginEx.timeout());
     }
 
@@ -4251,8 +4202,6 @@ public class KafkaFunctionsTest
                 .consumer()
                     .groupId("test")
                     .consumerId("consumer-1")
-                    .host("broker1.example.com")
-                    .port(9092)
                     .timeout(10000)
                     .topic("topic")
                     .partition(0)
@@ -4266,7 +4215,6 @@ public class KafkaFunctionsTest
 
         final KafkaConsumerBeginExFW consumerBeginEx = beginEx.consumer();
         assertEquals("test", consumerBeginEx.groupId().asString());
-        assertEquals("broker1.example.com", consumerBeginEx.host().asString());
         assertEquals("topic", consumerBeginEx.topic().asString());
         assertEquals(1, consumerBeginEx.partitionIds().fieldCount());
     }
@@ -4278,8 +4226,6 @@ public class KafkaFunctionsTest
             .typeId(0x01)
             .offsetFetch()
             .groupId("test")
-            .host("localhost")
-            .port(9092)
             .topic("topic")
             .partition(0)
             .build()
@@ -4292,8 +4238,6 @@ public class KafkaFunctionsTest
 
         final KafkaOffsetFetchBeginExFW offsetFetchBeginEx = beginEx.offsetFetch();
         assertEquals("topic", offsetFetchBeginEx.topic().asString());
-        assertEquals("localhost", offsetFetchBeginEx.host().asString());
-        assertEquals(9092, offsetFetchBeginEx.port());
         assertEquals(1, offsetFetchBeginEx.partitions().fieldCount());
     }
 
@@ -4303,11 +4247,10 @@ public class KafkaFunctionsTest
         byte[] build = KafkaFunctions.beginEx()
             .typeId(0x01)
             .offsetCommit()
+                .topic("topic")
                 .groupId("test")
                 .memberId("member-1")
                 .instanceId("zilla")
-                .host("broker1.example.com")
-                .port(9092)
                 .build()
             .build();
 
@@ -4318,6 +4261,7 @@ public class KafkaFunctionsTest
 
         final KafkaOffsetCommitBeginExFW offsetCommitBeginEx = beginEx.offsetCommit();
         assertEquals("test", offsetCommitBeginEx.groupId().asString());
+        assertEquals("topic", offsetCommitBeginEx.topic().asString());
         assertEquals("member-1", offsetCommitBeginEx.memberId().asString());
     }
 
@@ -4329,8 +4273,6 @@ public class KafkaFunctionsTest
                 .groupId("test")
                 .protocol("roundrobin")
                 .instanceId("zilla")
-                .host("localhost")
-                .port(9092)
                 .timeout(10)
                 .metadata("meta".getBytes())
                 .build()
@@ -4345,8 +4287,6 @@ public class KafkaFunctionsTest
                 .groupId("test")
                 .protocol("roundrobin")
                 .instanceId("zilla")
-                .host("localhost")
-                .port(9092)
                 .timeout(10)
                 .metadataLen("meta".length())
                 .metadata(m -> m.set("test".getBytes())))
@@ -4399,33 +4339,11 @@ public class KafkaFunctionsTest
     }
 
     @Test
-    public void shouldGenerateInitProducerIdBeginExtension()
-    {
-        byte[] build = KafkaFunctions.beginEx()
-            .typeId(0x01)
-            .initProducerId()
-                .producerId(1L)
-                .producerEpoch((short) 2)
-                .build()
-            .build();
-
-        DirectBuffer buffer = new UnsafeBuffer(build);
-        KafkaBeginExFW beginEx = new KafkaBeginExFW().wrap(buffer, 0, buffer.capacity());
-        assertEquals(0x01, beginEx.typeId());
-        assertEquals(KafkaApi.INIT_PRODUCER_ID.value(), beginEx.kind());
-
-        KafkaInitProducerIdBeginExFW initProducerIdBeginEx = beginEx.initProducerId();
-        assertEquals(1L, initProducerIdBeginEx.producerId());
-        assertEquals(2, initProducerIdBeginEx.producerEpoch());
-    }
-
-    @Test
     public void shouldGenerateOffsetCommitDataExtension()
     {
         byte[] build = KafkaFunctions.dataEx()
             .typeId(0x01)
             .offsetCommit()
-                .topic("test")
                 .progress(0, 2L, "test-meta")
                 .generationId(0)
                 .leaderEpoch(0)

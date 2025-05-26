@@ -20,12 +20,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.mockito.Mockito.mock;
 
-import java.time.Duration;
-
-import org.agrona.DirectBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -36,9 +31,6 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 
 import io.aklivity.zilla.runtime.catalog.schema.registry.internal.config.SchemaRegistryOptionsConfig;
-import io.aklivity.zilla.runtime.engine.EngineContext;
-import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
-import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
 
 public class SchemaRegistryIT
 {
@@ -51,16 +43,11 @@ public class SchemaRegistryIT
     public final TestRule chain = outerRule(k3po).around(timeout);
 
     private SchemaRegistryOptionsConfig config;
-    private EngineContext context = mock(EngineContext.class);
 
     @Before
     public void setup()
     {
-        config = SchemaRegistryOptionsConfig.builder()
-            .url("http://localhost:8081")
-            .context("default")
-            .maxAge(Duration.ofSeconds(1))
-            .build();
+        config = new SchemaRegistryOptionsConfig("http://localhost:8081", "default");
     }
 
     @Test
@@ -72,7 +59,7 @@ public class SchemaRegistryIT
             "{\"name\":\"status\",\"type\":\"string\"}]," +
             "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
 
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
+        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config);
 
         String schema = catalog.resolve(9);
 
@@ -91,7 +78,7 @@ public class SchemaRegistryIT
                 "{\"name\":\"status\",\"type\":\"string\"}]," +
                 "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
 
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
+        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config);
 
         int schemaId = catalog.resolve("items-snapshots-value", "latest");
 
@@ -112,7 +99,7 @@ public class SchemaRegistryIT
         String schema = "{\"type\": \"record\",\"name\": \"test\",\"fields\":[{\"type\": \"string\",\"name\": \"field1\"}," +
                 "{\"type\": \"com.acme.Referenced\",\"name\": \"int\"}]}";
 
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
+        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config);
 
         int schemaId = catalog.register("items-snapshots-value", "avro", schema);
 
@@ -131,7 +118,7 @@ public class SchemaRegistryIT
                 "{\"name\":\"status\",\"type\":\"string\"}]," +
                 "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
 
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
+        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config);
 
         catalog.resolve(9);
 
@@ -152,7 +139,7 @@ public class SchemaRegistryIT
                 "{\"name\":\"status\",\"type\":\"string\"}]," +
                 "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
 
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
+        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config);
 
         catalog.resolve(catalog.resolve("items-snapshots-value", "latest"));
 
@@ -165,61 +152,5 @@ public class SchemaRegistryIT
         assertEquals(schemaId, 9);
         assertThat(schema, not(nullValue()));
         assertEquals(expected, schema);
-    }
-
-    @Test
-    public void shouldVerifyMaxPadding()
-    {
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
-
-        assertEquals(5, catalog.encodePadding());
-    }
-
-    @Test
-    public void shouldVerifyEncodedData()
-    {
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        assertEquals(18, catalog.encode(1, data, 0, data.capacity(),
-            ValueConsumer.NOP, CatalogHandler.Encoder.IDENTITY));
-    }
-
-    @Test
-    public void shouldResolveSchemaIdAndProcessData()
-    {
-
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x00, 0x00, 0x00, 0x00, 0x09, 0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        int valLength = catalog.decode(data, 0, data.capacity(), ValueConsumer.NOP, CatalogHandler.Decoder.IDENTITY);
-
-        assertEquals(data.capacity() - 5, valLength);
-    }
-
-    @Test
-    public void shouldResolveSchemaIdFromData()
-    {
-        SchemaRegistryCatalogHandler catalog = new SchemaRegistryCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x00, 0x00, 0x00, 0x00, 0x09, 0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        int schemaId = catalog.resolve(data, 0, data.capacity());
-
-        assertEquals(9, schemaId);
     }
 }

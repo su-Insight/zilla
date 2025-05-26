@@ -21,7 +21,7 @@ import io.aklivity.zilla.runtime.engine.guard.GuardFactorySpi;
 public final class TestGuardFactorySpi implements GuardFactorySpi
 {
     @Override
-    public String type()
+    public String name()
     {
         return TestGuard.NAME;
     }

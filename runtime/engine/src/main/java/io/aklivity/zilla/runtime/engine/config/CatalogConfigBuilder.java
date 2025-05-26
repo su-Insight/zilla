@@ -23,7 +23,6 @@ public final class CatalogConfigBuilder<T> extends ConfigBuilder<T, CatalogConfi
 {
     private final Function<CatalogConfig, T> mapper;
 
-    private String namespace;
     private String name;
     private String type;
     private OptionsConfig options;
@@ -39,13 +38,6 @@ public final class CatalogConfigBuilder<T> extends ConfigBuilder<T, CatalogConfi
     protected Class<CatalogConfigBuilder<T>> thisType()
     {
         return (Class<CatalogConfigBuilder<T>>) getClass();
-    }
-
-    public CatalogConfigBuilder<T> namespace(
-        String namespace)
-    {
-        this.namespace = namespace;
-        return this;
     }
 
     public CatalogConfigBuilder<T> name(
@@ -78,6 +70,6 @@ public final class CatalogConfigBuilder<T> extends ConfigBuilder<T, CatalogConfi
     @Override
     public T build()
     {
-        return mapper.apply(new CatalogConfig(namespace, name, type, options));
+        return mapper.apply(new CatalogConfig(name, type, options));
     }
 }

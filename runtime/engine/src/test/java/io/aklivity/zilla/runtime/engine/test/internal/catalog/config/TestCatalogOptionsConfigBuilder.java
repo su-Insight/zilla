@@ -24,9 +24,7 @@ public final class TestCatalogOptionsConfigBuilder<T> extends ConfigBuilder<T, T
 {
     private final Function<OptionsConfig, T> mapper;
 
-    private String subject;
     private String schema;
-    private int id;
 
     TestCatalogOptionsConfigBuilder(
         Function<OptionsConfig, T> mapper)
@@ -41,13 +39,6 @@ public final class TestCatalogOptionsConfigBuilder<T> extends ConfigBuilder<T, T
         return (Class<TestCatalogOptionsConfigBuilder<T>>) getClass();
     }
 
-    public TestCatalogOptionsConfigBuilder<T> subject(
-        String subject)
-    {
-        this.subject = subject;
-        return this;
-    }
-
     public TestCatalogOptionsConfigBuilder<T> schema(
         String schema)
     {
@@ -55,16 +46,9 @@ public final class TestCatalogOptionsConfigBuilder<T> extends ConfigBuilder<T, T
         return this;
     }
 
-    public TestCatalogOptionsConfigBuilder<T> id(
-        int id)
-    {
-        this.id = id;
-        return this;
-    }
-
     @Override
     public T build()
     {
-        return mapper.apply(new TestCatalogOptionsConfig(id, subject, schema));
+        return mapper.apply(new TestCatalogOptionsConfig(schema));
     }
 }

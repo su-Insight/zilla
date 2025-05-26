@@ -118,17 +118,6 @@ public class ClientIT
     }
 
     @Test
-    @Configuration("client.ports.yaml")
-    @Specification({
-        "${app}/connection.established.with.port/client",
-        "${net}/connection.established/server"
-    })
-    public void shouldEstablishedConnectionWithPort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
     @Configuration("client.yaml")
     @Specification({
         "${app}/connection.established.no.hostname.no.alpn/client",
@@ -374,17 +363,6 @@ public class ClientIT
         "${net}/client.handshake.timeout/server" })
     @Configure(name = TlsConfigurationTest.TLS_HANDSHAKE_TIMEOUT_NAME, value = "1")
     public void shouldTimeoutHandshake() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("client.event.yaml")
-    @Specification({
-        "${app}/client.handshake.timeout/client",
-        "${net}/client.handshake.timeout/server" })
-    @Configure(name = TlsConfigurationTest.TLS_HANDSHAKE_TIMEOUT_NAME, value = "1")
-    public void shouldLogHandshakeErrorEvent() throws Exception
     {
         k3po.finish();
     }

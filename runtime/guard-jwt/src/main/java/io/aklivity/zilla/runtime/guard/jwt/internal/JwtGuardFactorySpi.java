@@ -20,7 +20,7 @@ import io.aklivity.zilla.runtime.engine.guard.GuardFactorySpi;
 public final class JwtGuardFactorySpi implements GuardFactorySpi
 {
     @Override
-    public String type()
+    public String name()
     {
         return JwtGuard.NAME;
     }

@@ -22,7 +22,7 @@ import io.aklivity.zilla.runtime.engine.binding.BindingFactorySpi;
 public final class TcpBindingFactorySpi implements BindingFactorySpi
 {
     @Override
-    public String type()
+    public String name()
     {
         return TcpBinding.NAME;
     }

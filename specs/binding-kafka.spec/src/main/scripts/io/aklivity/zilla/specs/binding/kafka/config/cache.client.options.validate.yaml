@@ -20,7 +20,6 @@ catalogs:
   test0:
     type: test
     options:
-      id: 1
       schema: |
         {
           "fields": [
@@ -45,11 +44,7 @@ bindings:
       topics:
         - name: test
           value:
-            model: test
-            length: 13
-            catalog:
-              test0:
-                - id: 1
+            type: test
     routes:
       - exit: cache0
         when:

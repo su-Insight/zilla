@@ -16,7 +16,6 @@
 module io.aklivity.zilla.runtime.command
 {
     requires transitive com.github.rvesse.airline;
-    requires io.aklivity.zilla.runtime.common;
 
     exports io.aklivity.zilla.runtime.command;
 

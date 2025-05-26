@@ -15,7 +15,6 @@
  */
 package io.aklivity.zilla.runtime.engine.test.internal.exporter.config;
 
-import java.util.List;
 import java.util.function.Function;
 
 import io.aklivity.zilla.runtime.engine.config.OptionsConfig;
@@ -23,7 +22,6 @@ import io.aklivity.zilla.runtime.engine.config.OptionsConfig;
 public final class TestExporterOptionsConfig extends OptionsConfig
 {
     public final String mode;
-    public final List<Event> events;
 
     public static TestExporterOptionsConfigBuilder<TestExporterOptionsConfig> builder()
     {
@@ -37,24 +35,8 @@ public final class TestExporterOptionsConfig extends OptionsConfig
     }
 
     TestExporterOptionsConfig(
-        String mode,
-        List<Event> events)
+        String mode)
     {
         this.mode = mode;
-        this.events = events;
-    }
-
-    public static final class Event
-    {
-        public final String qName;
-        public final String message;
-
-        public Event(
-            String qName,
-            String message)
-        {
-            this.qName = qName;
-            this.message = message;
-        }
     }
 }

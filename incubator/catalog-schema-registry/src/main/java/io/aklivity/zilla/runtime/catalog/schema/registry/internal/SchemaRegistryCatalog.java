@@ -40,7 +40,7 @@ public class SchemaRegistryCatalog implements Catalog
     public CatalogContext supply(
         EngineContext context)
     {
-        return new SchemaRegistryCatalogContext(context);
+        return new SchemaRegistryCatalogContext();
     }
 
     @Override

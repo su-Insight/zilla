@@ -16,6 +16,7 @@
 package io.aklivity.zilla.runtime.engine.internal.config;
 
 import static io.aklivity.zilla.runtime.engine.config.KindConfig.SERVER;
+import static java.util.Collections.emptyMap;
 import static java.util.function.Function.identity;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyCollectionOf;
@@ -41,6 +42,7 @@ import org.mockito.quality.Strictness;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
+import io.aklivity.zilla.runtime.engine.config.NamespaceRefConfig;
 import io.aklivity.zilla.runtime.engine.config.VaultConfig;
 import io.aklivity.zilla.runtime.engine.test.internal.catalog.config.TestCatalogOptionsConfig;
 import io.aklivity.zilla.runtime.engine.test.internal.exporter.config.TestExporterOptionsConfig;
@@ -89,6 +91,7 @@ public class NamespaceConfigAdapterTest
         assertThat(config.name, equalTo("test"));
         assertThat(config.bindings, emptyCollectionOf(BindingConfig.class));
         assertThat(config.vaults, emptyCollectionOf(VaultConfig.class));
+        assertThat(config.references, emptyCollectionOf(NamespaceRefConfig.class));
     }
 
     @Test
@@ -132,6 +135,7 @@ public class NamespaceConfigAdapterTest
         assertThat(config.bindings.get(0).type, equalTo("test"));
         assertThat(config.bindings.get(0).kind, equalTo(SERVER));
         assertThat(config.vaults, emptyCollectionOf(VaultConfig.class));
+        assertThat(config.references, emptyCollectionOf(NamespaceRefConfig.class));
     }
 
     @Test
@@ -333,5 +337,47 @@ public class NamespaceConfigAdapterTest
                 "{\"attributes\":{\"test.attribute\":\"example\"}," +
                 "\"metrics\":[\"test.counter\"]," +
                 "\"exporters\":{\"test0\":{\"type\":\"test\",\"options\":{\"mode\":\"test42\"}}}}}"));
+    }
+
+    @Test
+    public void shouldReadNamespaceWithReference()
+    {
+        String text =
+                "{" +
+                    "\"name\": \"test\"," +
+                    "\"references\":" +
+                    "[" +
+                        "{" +
+                            "\"name\": \"test\"" +
+                        "}" +
+                    "]" +
+                "}";
+
+        NamespaceConfig config = jsonb.fromJson(text, NamespaceConfig.class);
+
+        assertThat(config, not(nullValue()));
+        assertThat(config.name, equalTo("test"));
+        assertThat(config.bindings, emptyCollectionOf(BindingConfig.class));
+        assertThat(config.vaults, emptyCollectionOf(VaultConfig.class));
+        assertThat(config.references, hasSize(1));
+        assertThat(config.references.get(0).name, equalTo("test"));
+        assertThat(config.references.get(0).links, equalTo(emptyMap()));
+    }
+
+    @Test
+    public void shouldWriteNamespaceWithReference()
+    {
+        NamespaceConfig config = NamespaceConfig.builder()
+                .inject(identity())
+                .name("test")
+                .namespace()
+                    .name("test")
+                    .build()
+                .build();
+
+        String text = jsonb.toJson(config);
+
+        assertThat(text, not(nullValue()));
+        assertThat(text, equalTo("{\"name\":\"test\",\"references\":[{\"name\":\"test\"}]}"));
     }
 }

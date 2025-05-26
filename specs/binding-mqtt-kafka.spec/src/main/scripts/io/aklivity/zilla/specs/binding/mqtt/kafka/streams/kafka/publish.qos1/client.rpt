@@ -23,7 +23,7 @@ write zilla:begin.ext ${kafka:beginEx()
                                 .capabilities("PRODUCE_ONLY")
                                 .topic("mqtt-messages")
                                 .partition(-1, -2)
-                                .ackMode("IN_SYNC_REPLICAS")
+                                .ackMode("LEADER_ONLY")
                                 .build()
                             .build()}
 

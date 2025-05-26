@@ -21,7 +21,6 @@ public final class GuardConfigBuilder<T> extends ConfigBuilder<T, GuardConfigBui
 {
     private final Function<GuardConfig, T> mapper;
 
-    private String namespace;
     private String name;
     private String type;
     private OptionsConfig options;
@@ -37,13 +36,6 @@ public final class GuardConfigBuilder<T> extends ConfigBuilder<T, GuardConfigBui
     protected Class<GuardConfigBuilder<T>> thisType()
     {
         return (Class<GuardConfigBuilder<T>>) getClass();
-    }
-
-    public GuardConfigBuilder<T> namespace(
-        String namespace)
-    {
-        this.namespace = namespace;
-        return this;
     }
 
     public GuardConfigBuilder<T> name(
@@ -76,6 +68,6 @@ public final class GuardConfigBuilder<T> extends ConfigBuilder<T, GuardConfigBui
     @Override
     public T build()
     {
-        return mapper.apply(new GuardConfig(namespace, name, type, options));
+        return mapper.apply(new GuardConfig(name, type, options));
     }
 }

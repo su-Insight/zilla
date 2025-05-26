@@ -27,8 +27,6 @@ public final class VaultConfigBuilder<T> extends ConfigBuilder<T, VaultConfigBui
     private String type;
     private OptionsConfig options;
 
-    private String namespace;
-
     VaultConfigBuilder(
         Function<VaultConfig, T> mapper)
     {
@@ -40,13 +38,6 @@ public final class VaultConfigBuilder<T> extends ConfigBuilder<T, VaultConfigBui
     protected Class<VaultConfigBuilder<T>> thisType()
     {
         return (Class<VaultConfigBuilder<T>>) getClass();
-    }
-
-    public VaultConfigBuilder<T> namespace(
-        String namespace)
-    {
-        this.namespace = namespace;
-        return this;
     }
 
     public VaultConfigBuilder<T> name(
@@ -79,6 +70,6 @@ public final class VaultConfigBuilder<T> extends ConfigBuilder<T, VaultConfigBui
     @Override
     public T build()
     {
-        return mapper.apply(new VaultConfig(namespace, name, type, options));
+        return mapper.apply(new VaultConfig(name, type, options));
     }
 }

@@ -64,6 +64,15 @@ public class MqttIT
 
     @Test
     @Specification({
+        "${mqtt}/publish.server.sent.flush/client",
+        "${mqtt}/publish.server.sent.flush/server"})
+    public void shouldPublishReceiveServerSentFlush() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${mqtt}/publish.server.sent.reset/client",
         "${mqtt}/publish.server.sent.reset/server"})
     public void shouldPublishReceiveServerSentReset() throws Exception
@@ -94,24 +103,6 @@ public class MqttIT
         "${mqtt}/publish.one.message/client",
         "${mqtt}/publish.one.message/server"})
     public void shouldSendOneMessage() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.10k/client",
-        "${mqtt}/publish.10k/server"})
-    public void shouldSendMessage10k() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.retained.10k/client",
-        "${mqtt}/publish.retained.10k/server"})
-    public void shouldSendRetainedMessage10k() throws Exception
     {
         k3po.finish();
     }
@@ -220,6 +211,15 @@ public class MqttIT
         "${mqtt}/subscribe.server.sent.abort/client",
         "${mqtt}/subscribe.server.sent.abort/server"})
     public void shouldSubscribeReceiveServerSentAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/subscribe.server.sent.flush/client",
+        "${mqtt}/subscribe.server.sent.flush/server"})
+    public void shouldSubscribeReceiveServerSentFlush() throws Exception
     {
         k3po.finish();
     }
@@ -585,17 +585,6 @@ public class MqttIT
 
     @Test
     @Specification({
-        "${mqtt}/session.will.message.10k.abort.deliver.will/client",
-        "${mqtt}/session.will.message.10k.abort.deliver.will/server"})
-    public void shouldSendWillMessage10kOnAbort() throws Exception
-    {
-        k3po.start();
-        k3po.notifyBarrier("WILL_STREAM_STARTED");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${mqtt}/session.will.message.normal.disconnect/client",
         "${mqtt}/session.will.message.normal.disconnect/server"})
     public void shouldNotSendWillMessageOnNormalDisconnect() throws Exception
@@ -666,74 +655,6 @@ public class MqttIT
     public void shouldPublishQoS2Message() throws Exception
     {
         k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.qos2.retained/client",
-        "${mqtt}/publish.qos2.retained/server"})
-    public void shouldPublishQoS2MessageRetained() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.qos2.recovery/client",
-        "${mqtt}/publish.qos2.recovery/server"})
-    public void shouldPublishQoS2MessageDuringRecovery() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.qos2.abort/client",
-        "${mqtt}/publish.qos2.abort/server"})
-    public void shouldSessionReceiveQos2Abort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.qos2.offset.commit.abort.phase1/client",
-        "${mqtt}/publish.qos2.offset.commit.abort.phase1/server"})
-    public void shouldPublishReceiveQos2OffsetCommitSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.qos2.offset.commit.abort.phase2/client",
-        "${mqtt}/publish.qos2.offset.commit.abort.phase2/server"})
-    public void shouldSessionReceiveQos2OffsetCommitAbort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.mixture.qos/client",
-        "${mqtt}/publish.mixture.qos/server"})
-    public void shouldSendMessageMixtureQos() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/publish.reject.large.message/client",
-        "${mqtt}/publish.reject.large.message/server"})
-    public void shouldRejectLargeMessage() throws Exception
-    {
         k3po.finish();
     }
 
@@ -823,15 +744,6 @@ public class MqttIT
         "${mqtt}/subscribe.receive.message.overlapping.wildcard.mixed.qos/client",
         "${mqtt}/subscribe.receive.message.overlapping.wildcard.mixed.qos/server"})
     public void shouldReceiveMessageOverlappingWildcardMixedQos() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/subscribe.expire.message/client",
-        "${mqtt}/subscribe.expire.message/server"})
-    public void shouldExpireMessage() throws Exception
     {
         k3po.finish();
     }

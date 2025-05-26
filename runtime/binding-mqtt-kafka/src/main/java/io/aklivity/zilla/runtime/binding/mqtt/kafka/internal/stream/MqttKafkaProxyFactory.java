@@ -48,16 +48,15 @@ public class MqttKafkaProxyFactory implements MqttKafkaStreamFactory
     {
         final Long2ObjectHashMap<MqttKafkaBindingConfig> bindings = new Long2ObjectHashMap<>();
         final Int2ObjectHashMap<MqttKafkaStreamFactory> factories = new Int2ObjectHashMap<>();
-        final Long2ObjectHashMap<MqttKafkaPublishMetadata> clientMetadata = new Long2ObjectHashMap<>();
 
-        final MqttKafkaPublishFactory publishFactory = new MqttKafkaPublishFactory(config, context, bindings::get,
-            clientMetadata::get);
+        final MqttKafkaPublishFactory publishFactory = new MqttKafkaPublishFactory(
+            config, context, bindings::get);
 
         final MqttKafkaSubscribeFactory subscribeFactory = new MqttKafkaSubscribeFactory(
             config, context, bindings::get);
 
         final MqttKafkaSessionFactory sessionFactory = new MqttKafkaSessionFactory(
-            config, context, instanceId, bindings::get, clientMetadata);
+            config, context, instanceId, bindings::get);
 
         factories.put(MqttBeginExFW.KIND_PUBLISH, publishFactory);
         factories.put(MqttBeginExFW.KIND_SUBSCRIBE, subscribeFactory);

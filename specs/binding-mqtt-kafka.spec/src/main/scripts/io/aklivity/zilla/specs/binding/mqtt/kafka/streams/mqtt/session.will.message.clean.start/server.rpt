@@ -24,7 +24,6 @@ read zilla:begin.ext ${mqtt:matchBeginEx()
                             .session()
                                .flags("WILL", "CLEAN_START")
                                .expiry(1)
-                               .capabilities("REDIRECT")
                                .clientId("client-1")
                                .build()
                             .build()}
@@ -41,9 +40,8 @@ read zilla:data.ext ${mqtt:dataEx()
 read ${mqtt:will()
                .topic("obituaries")
                .format("TEXT")
-               .payloadSize(30)
+               .payload("client-1 disconnected abruptly")
                .build()}
-read "client-1 disconnected abruptly"
 
 write zilla:data.empty
 write flush

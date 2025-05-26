@@ -42,7 +42,7 @@ import io.aklivity.zilla.runtime.binding.http.config.HttpRequestConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpVersion;
 import io.aklivity.zilla.runtime.binding.http.internal.types.String16FW;
 import io.aklivity.zilla.runtime.binding.http.internal.types.String8FW;
-import io.aklivity.zilla.runtime.engine.test.internal.model.config.TestModelConfig;
+import io.aklivity.zilla.runtime.engine.test.internal.validator.config.TestValidatorConfig;
 
 public class HttpOptionsConfigAdapterTest
 {
@@ -158,16 +158,16 @@ public class HttpOptionsConfigAdapterTest
         assertThat(request.method, equalTo(HttpRequestConfig.Method.GET));
         assertThat(request.contentType.get(0), equalTo("application/json"));
         assertThat(request.headers.get(0).name, equalTo("content-type"));
-        assertThat(request.headers.get(0).model, instanceOf(TestModelConfig.class));
-        assertThat(request.headers.get(0).model.model, equalTo("test"));
+        assertThat(request.headers.get(0).validator, instanceOf(TestValidatorConfig.class));
+        assertThat(request.headers.get(0).validator.type, equalTo("test"));
         assertThat(request.pathParams.get(0).name, equalTo("id"));
-        assertThat(request.pathParams.get(0).model, instanceOf(TestModelConfig.class));
-        assertThat(request.pathParams.get(0).model.model, equalTo("test"));
+        assertThat(request.pathParams.get(0).validator, instanceOf(TestValidatorConfig.class));
+        assertThat(request.pathParams.get(0).validator.type, equalTo("test"));
         assertThat(request.queryParams.get(0).name, equalTo("index"));
-        assertThat(request.queryParams.get(0).model, instanceOf(TestModelConfig.class));
-        assertThat(request.queryParams.get(0).model.model, equalTo("test"));
-        assertThat(request.content, instanceOf(TestModelConfig.class));
-        assertThat(request.content.model, equalTo("test"));
+        assertThat(request.queryParams.get(0).validator, instanceOf(TestValidatorConfig.class));
+        assertThat(request.queryParams.get(0).validator.type, equalTo("test"));
+        assertThat(request.content, instanceOf(TestValidatorConfig.class));
+        assertThat(request.content.type, equalTo("test"));
     }
 
     @Test
@@ -280,20 +280,20 @@ public class HttpOptionsConfigAdapterTest
                 .contentType("application/json")
                 .header()
                     .name("content-type")
-                    .model(TestModelConfig::builder)
+                    .validator(TestValidatorConfig::builder)
                         .build()
                     .build()
                 .pathParam()
                     .name("id")
-                    .model(TestModelConfig::builder)
+                    .validator(TestValidatorConfig::builder)
                         .build()
                     .build()
                 .queryParam()
                     .name("index")
-                    .model(TestModelConfig::builder)
+                    .validator(TestValidatorConfig::builder)
                         .build()
                     .build()
-                .content(TestModelConfig::builder)
+                .content(TestValidatorConfig::builder)
                     .build()
                 .build()
             .build();

@@ -24,10 +24,6 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.bind.adapter.JsonbAdapter;
 
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithFetchConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithFetchMergeConfig;
-
 public final class HttpKafkaWithFetchConfigAdapter implements JsonbAdapter<HttpKafkaWithConfig, JsonObject>
 {
     private static final String CAPABILITY_NAME = "capability";
@@ -170,20 +166,10 @@ public final class HttpKafkaWithFetchConfigAdapter implements JsonbAdapter<HttpK
                     path = patch.getString(MERGE_PATCH_PATH_NAME);
                 }
 
-                newMerged = HttpKafkaWithFetchMergeConfig.builder()
-                    .contentType(contentType)
-                    .initial(initial)
-                    .path(path)
-                    .build();
+                newMerged = new HttpKafkaWithFetchMergeConfig(contentType, initial, path);
             }
         }
 
-        return HttpKafkaWithConfig.builder()
-            .fetch(HttpKafkaWithFetchConfig.builder()
-                .topic(newTopic)
-                .filters(newFilters)
-                .merged(newMerged)
-                .build())
-            .build();
+        return new HttpKafkaWithConfig(new HttpKafkaWithFetchConfig(newTopic, newFilters, newMerged));
     }
 }

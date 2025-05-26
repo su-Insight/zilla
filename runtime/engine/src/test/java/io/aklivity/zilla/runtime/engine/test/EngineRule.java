@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import org.agrona.ErrorHandler;
@@ -74,14 +73,12 @@ public final class EngineRule implements TestRule
 
     private EngineConfiguration configuration;
     private String configurationRoot;
-    private Predicate<String> exceptions;
     private boolean clean;
 
     public EngineRule()
     {
         this.builder = Engine.builder();
         this.properties = new Properties();
-        this.exceptions = m -> false;
 
         configure(ENGINE_DRAIN_ON_CLOSE, true);
         configure(ENGINE_SYNTHETIC_ABORT, true);
@@ -137,13 +134,6 @@ public final class EngineRule implements TestRule
         String binding)
     {
         builder.affinity(namespace, binding, EXTERNAL_AFFINITY_MASK);
-        return this;
-    }
-
-    public EngineRule exceptions(
-        Predicate<String> exceptions)
-    {
-        this.exceptions = exceptions;
         return this;
     }
 
@@ -297,12 +287,11 @@ public final class EngineRule implements TestRule
 
             cleanup();
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
-            LangUtil.rethrowUnchecked(ex);
+            LangUtil.rethrowUnchecked(e);
         }
 
-        boolean allowErrors = exceptions.test(testMethod);
 
         return new Statement()
         {
@@ -344,10 +333,7 @@ public final class EngineRule implements TestRule
                     }
                     finally
                     {
-                        if (!allowErrors)
-                        {
-                            assertEmpty(errors);
-                        }
+                        assertEmpty(errors);
                     }
                 }
             }

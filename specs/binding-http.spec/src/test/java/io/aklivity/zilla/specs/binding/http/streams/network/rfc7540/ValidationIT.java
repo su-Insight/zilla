@@ -38,8 +38,8 @@ public class ValidationIT
 
     @Test
     @Specification({
-        "${net}/valid.request/client",
-        "${net}/valid.request/server" })
+        "${net}/valid/client",
+        "${net}/valid/server" })
     public void shouldProcessValidRequests() throws Exception
     {
         k3po.start();
@@ -48,38 +48,11 @@ public class ValidationIT
 
     @Test
     @Specification({
-        "${net}/invalid.request/client",
-        "${net}/invalid.request/server" })
+        "${net}/invalid/client",
+        "${net}/invalid/server" })
     public void shouldRejectInvalidRequests() throws Exception
     {
         k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${net}/invalid.response.header/client",
-        "${net}/invalid.response.header/server" })
-    public void shouldSendErrorForInvalidHeaderResponse() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${net}/invalid.response.content/client",
-        "${net}/invalid.response.content/server" })
-    public void shouldAbortForInvalidResponse() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${net}/valid.response/client",
-        "${net}/valid.response/server" })
-    public void shouldProcessValidResponse() throws Exception
-    {
         k3po.finish();
     }
 }

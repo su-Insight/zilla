@@ -15,21 +15,23 @@
  */
 package io.aklivity.zilla.runtime.engine.catalog;
 
+import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.ServiceLoader.load;
 
 import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.TreeMap;
 
 import io.aklivity.zilla.runtime.engine.Configuration;
-import io.aklivity.zilla.runtime.engine.factory.Factory;
 
-public final class CatalogFactory extends Factory
+public final class CatalogFactory
 {
     private final Map<String, CatalogFactorySpi> factorySpis;
 
     public static CatalogFactory instantiate()
     {
-        return instantiate(load(CatalogFactorySpi.class), CatalogFactory::new);
+        return instantiate(load(CatalogFactorySpi.class));
     }
 
     public Iterable<String> names()
@@ -46,6 +48,15 @@ public final class CatalogFactory extends Factory
         CatalogFactorySpi factorySpi = requireNonNull(factorySpis.get(name), () -> "Unrecognized catalog name: " + name);
 
         return factorySpi.create(config);
+    }
+
+    private static CatalogFactory instantiate(
+        ServiceLoader<CatalogFactorySpi> factories)
+    {
+        Map<String, CatalogFactorySpi> factorySpisByName = new TreeMap<>();
+        factories.forEach(factorySpi -> factorySpisByName.put(factorySpi.name(), factorySpi));
+
+        return new CatalogFactory(unmodifiableMap(factorySpisByName));
     }
 
     private CatalogFactory(

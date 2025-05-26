@@ -120,15 +120,6 @@ public class ConnectionIT
 
     @Test
     @Specification({
-        "${net}/connect.unsupported.protocol.version/client",
-        "${net}/connect.unsupported.protocol.version/server"})
-    public void shouldRejectUnsupportedProtocolVersion() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${net}/connect.invalid.flags/client",
         "${net}/connect.invalid.flags/server"})
     public void shouldRejectMalformedConnectPacket() throws Exception
@@ -396,6 +387,25 @@ public class ConnectionIT
         "${net}/connect.reject.password.flag.no.password/client",
         "${net}/connect.reject.password.flag.no.password/server"})
     public void shouldRejectPasswordFlagWhenMissingPassword() throws Exception
+    {
+        k3po.finish();
+    }
+
+    // [MQTT-3.1.2-24]
+    @Test
+    @Specification({
+        "${net}/connect.max.packet.size.exceeded/client",
+        "${net}/connect.max.packet.size.exceeded/server"})
+    public void shouldNotReceivePublishPacketExceedingMaxPacketLimit() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${net}/connect.reject.packet.too.large/client",
+        "${net}/connect.reject.packet.too.large/server"})
+    public void shouldRejectPacketTooLarge() throws Exception
     {
         k3po.finish();
     }

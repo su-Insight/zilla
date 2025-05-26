@@ -18,6 +18,7 @@ import static com.github.npathai.hamcrestopt.OptionalMatchers.isEmpty;
 import static com.github.npathai.hamcrestopt.OptionalMatchers.isPresent;
 import static com.github.npathai.hamcrestopt.OptionalMatchers.isPresentAnd;
 import static com.vtence.hamcrest.jpa.HasFieldWithValue.hasField;
+import static io.aklivity.zilla.runtime.binding.http.kafka.internal.types.KafkaAckMode.IN_SYNC_REPLICAS;
 import static io.aklivity.zilla.runtime.binding.http.kafka.internal.types.KafkaAckMode.LEADER_ONLY;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -34,13 +35,6 @@ import jakarta.json.bind.JsonbConfig;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithFetchConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithFetchMergeConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithProduceAsyncHeaderConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithProduceConfig;
-import io.aklivity.zilla.runtime.binding.http.kafka.config.HttpKafkaWithProduceOverrideConfig;
 
 public class HttpKafkaWithConfigAdapterTest
 {
@@ -76,13 +70,8 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithFetchTopic()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .fetch(HttpKafkaWithFetchConfig.builder()
-                .topic("test")
-                .filters(null)
-                .merged(null)
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithFetchConfig("test", null, null));
 
         String text = jsonb.toJson(with);
 
@@ -126,17 +115,15 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithFetchTopicAndFilters()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .fetch(HttpKafkaWithFetchConfig.builder()
-                .topic("test")
-                .filters(singletonList(new HttpKafkaWithFetchFilterConfig(
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithFetchConfig(
+                    "test",
+                    singletonList(new HttpKafkaWithFetchFilterConfig(
                         "fixed-key",
                         singletonList(new HttpKafkaWithFetchFilterHeaderConfig(
                             "tag",
-                            "fixed-tag")))))
-                .merged(null)
-                .build())
-            .build();
+                            "fixed-tag")))),
+                    null));
 
         String text = jsonb.toJson(with);
 
@@ -182,17 +169,11 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithFetchTopicAndMerge()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .fetch(HttpKafkaWithFetchConfig.builder()
-                .topic("test")
-                .filters(null)
-                .merged(HttpKafkaWithFetchMergeConfig.builder()
-                    .contentType("application/json")
-                    .initial("{\"data\":[]}")
-                    .path("/data/-")
-                    .build())
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithFetchConfig(
+                    "test",
+                    null,
+                    new HttpKafkaWithFetchMergeConfig("application/json", "{\"data\":[]}", "/data/-")));
 
         String text = jsonb.toJson(with);
 
@@ -229,12 +210,8 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopic()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("in_sync_replicas")
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig("test", IN_SYNC_REPLICAS, null, null, null, null));
 
         String text = jsonb.toJson(with);
 
@@ -269,12 +246,8 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopicAndAcks()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("leader_only")
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig("test", LEADER_ONLY, null, null, null, null));
 
         String text = jsonb.toJson(with);
 
@@ -308,13 +281,8 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopicAndKey()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("in_sync_replicas")
-                .key("${params.id}")
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig("test", IN_SYNC_REPLICAS, "${params.id}", null, null, null));
 
         String text = jsonb.toJson(with);
 
@@ -355,16 +323,14 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopicAndOverrides()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("in_sync_replicas")
-                .overrides(singletonList(HttpKafkaWithProduceOverrideConfig.builder()
-                    .name("id")
-                    .value("${params.id}")
-                    .build()))
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig(
+                        "test",
+                        IN_SYNC_REPLICAS,
+                        null,
+                        singletonList(new HttpKafkaWithProduceOverrideConfig("id", "${params.id}")),
+                        null,
+                        null));
 
         String text = jsonb.toJson(with);
 
@@ -398,13 +364,8 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopicAndReplyTo()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("in_sync_replicas")
-                .replyTo("replies")
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig("test", IN_SYNC_REPLICAS, null, null, "replies", null));
 
         String text = jsonb.toJson(with);
 
@@ -445,17 +406,15 @@ public class HttpKafkaWithConfigAdapterTest
     @Test
     public void shouldWriteWithProduceTopicAndAsync()
     {
-        HttpKafkaWithConfig with = HttpKafkaWithConfig.builder()
-            .produce(HttpKafkaWithProduceConfig.builder()
-                .topic("test")
-                .acks("in_sync_replicas")
-                .async(singletonList(
-                            HttpKafkaWithProduceAsyncHeaderConfig.builder()
-                                .name("location")
-                                .value("/items/${params.id};${correlationId}")
-                                .build()))
-                .build())
-            .build();
+        HttpKafkaWithConfig with = new HttpKafkaWithConfig(
+                new HttpKafkaWithProduceConfig(
+                        "test",
+                        IN_SYNC_REPLICAS,
+                        null,
+                        null,
+                        null,
+                        singletonList(
+                            new HttpKafkaWithProduceAsyncHeaderConfig("location", "/items/${params.id};${correlationId}"))));
 
         String text = jsonb.toJson(with);
 

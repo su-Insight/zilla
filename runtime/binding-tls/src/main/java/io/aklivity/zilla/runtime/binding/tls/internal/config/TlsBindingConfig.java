@@ -20,7 +20,6 @@ import static io.aklivity.zilla.runtime.binding.tls.internal.types.ProxyInfoType
 import static io.aklivity.zilla.runtime.binding.tls.internal.types.ProxyInfoType.AUTHORITY;
 import static io.aklivity.zilla.runtime.binding.tls.internal.types.ProxyInfoType.SECURE;
 import static io.aklivity.zilla.runtime.binding.tls.internal.types.ProxySecureInfoType.NAME;
-import static java.lang.System.currentTimeMillis;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static javax.net.ssl.StandardConstants.SNI_HOST_NAME;
@@ -55,7 +54,6 @@ import io.aklivity.zilla.runtime.binding.tls.config.TlsOptionsConfig;
 import io.aklivity.zilla.runtime.binding.tls.internal.TlsConfiguration;
 import io.aklivity.zilla.runtime.binding.tls.internal.identity.TlsClientX509ExtendedKeyManager;
 import io.aklivity.zilla.runtime.binding.tls.internal.types.Array32FW;
-import io.aklivity.zilla.runtime.binding.tls.internal.types.ProxyAddressFW;
 import io.aklivity.zilla.runtime.binding.tls.internal.types.ProxyInfoFW;
 import io.aklivity.zilla.runtime.binding.tls.internal.types.stream.ProxyBeginExFW;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
@@ -70,7 +68,7 @@ public final class TlsBindingConfig
 
     public final long id;
     public final long vaultId;
-    public final String qname;
+    public final String name;
     public final TlsOptionsConfig options;
     public final KindConfig kind;
     public final List<TlsRouteConfig> routes;
@@ -82,7 +80,7 @@ public final class TlsBindingConfig
     {
         this.id = binding.id;
         this.vaultId = binding.vaultId;
-        this.qname = binding.qname;
+        this.name = binding.name;
         this.kind = binding.kind;
         this.options = binding.options != null ? TlsOptionsConfig.class.cast(binding.options) : OPTIONS_DEFAULT;
         this.routes = binding.routes.stream().map(TlsRouteConfig::new).collect(toList());
@@ -147,62 +145,20 @@ public final class TlsBindingConfig
     {
         Array32FW<ProxyInfoFW> infos = beginEx != null ? beginEx.infos() : null;
         ProxyInfoFW authorityInfo = infos != null ? infos.matchFirst(a -> a.kind() == AUTHORITY) : null;
-        String authority = authorityInfo != null ? authorityInfo.authority().asString() : null;
-
         ProxyInfoFW alpnInfo = infos != null ? infos.matchFirst(a -> a.kind() == ALPN) : null;
+        String authority = authorityInfo != null ? authorityInfo.authority().asString() : null;
         String alpn = alpnInfo != null ? alpnInfo.alpn().asString() : null;
 
-        int port = resolveDestinationPort(beginEx);
-
-        return resolve(authorization, authority, alpn, port);
-    }
-
-    public TlsRouteConfig resolvePortOnly(
-        long authorization,
-        int port)
-    {
-        return routes.stream()
-                .filter(r -> r.authorized(authorization) && r.matchesPortOnly(port))
-                .findFirst()
-                .orElse(null);
-    }
-
-    public static int resolveDestinationPort(
-        ProxyBeginExFW beginEx)
-    {
-        int port = 0;
-
-        if (beginEx != null)
-        {
-            ProxyAddressFW address = beginEx.address();
-
-            switch (address.kind())
-            {
-            case INET:
-                port = address.inet().destinationPort();
-                break;
-            case INET4:
-                port = address.inet4().destinationPort();
-                break;
-            case INET6:
-                port = address.inet6().destinationPort();
-                break;
-            default:
-                break;
-            }
-        }
-
-        return port;
+        return resolve(authorization, authority, alpn);
     }
 
     public TlsRouteConfig resolve(
         long authorization,
         String hostname,
-        String alpn,
-        int port)
+        String alpn)
     {
         return routes.stream()
-                .filter(r -> r.authorized(authorization) && r.matches(hostname, alpn, port))
+                .filter(r -> r.authorized(authorization) && r.matches(hostname, alpn))
                 .findFirst()
                 .orElse(null);
     }
@@ -218,7 +174,7 @@ public final class TlsBindingConfig
             engine.setUseClientMode(true);
 
             List<String> sni = options.sni;
-            if (beginEx != null)
+            if (sni == null && beginEx != null)
             {
                 ProxyInfoFW info = beginEx.infos().matchFirst(a -> a.kind() == AUTHORITY);
 
@@ -281,8 +237,7 @@ public final class TlsBindingConfig
     }
 
     public SSLEngine newServerEngine(
-        long authorization,
-        int port)
+        long authorization)
     {
         SSLEngine engine = null;
 
@@ -306,7 +261,7 @@ public final class TlsBindingConfig
                 break;
             }
 
-            engine.setHandshakeApplicationProtocolSelector((ngin, alpns) -> selectAlpn(ngin, alpns, authorization, port));
+            engine.setHandshakeApplicationProtocolSelector((ngin, alpns) -> selectAlpn(ngin, alpns, authorization));
         }
 
         return engine;
@@ -315,8 +270,7 @@ public final class TlsBindingConfig
     private String selectAlpn(
         SSLEngine engine,
         List<String> protocols,
-        long authorization,
-        int port)
+        long authorization)
     {
         List<SNIServerName> serverNames = null;
 
@@ -365,7 +319,7 @@ public final class TlsBindingConfig
                             }
 
                             if (route.authorized(authorization) &&
-                                route.matches(authority, protocol, port))
+                                route.matches(authority, protocol))
                             {
                                 selected = protocol;
                                 break;
@@ -387,7 +341,7 @@ public final class TlsBindingConfig
                     }
 
                     if (route.authorized(authorization) &&
-                        route.matches(null, protocol, port))
+                        route.matches(null, protocol))
                     {
                         selected = protocol;
                         break;
@@ -440,16 +394,6 @@ public final class TlsBindingConfig
                 for (String keyName : keyNames)
                 {
                     KeyStore.PrivateKeyEntry entry = vault.key(keyName);
-                    if (entry == null)
-                    {
-                        if (config.verbose())
-                        {
-                            System.out.printf("%d [%s] key \"%s\" not found\n",
-                                    currentTimeMillis(), this.qname, keyName);
-                        }
-                        continue;
-                    }
-
                     KeyStore.ProtectionParameter protection = new KeyStore.PasswordProtection(password);
                     store.setEntry(keyName, entry, protection);
                 }

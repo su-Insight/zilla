@@ -815,6 +815,7 @@ public final class KafkaCacheOffsetFetchFactory implements BindingHandler
             final long sequence = begin.sequence();
             final long acknowledge = begin.acknowledge();
             final long traceId = begin.traceId();
+            final long authorization = begin.authorization();
             final long affinity = begin.affinity();
             final OctetsFW extension = begin.extension();
 

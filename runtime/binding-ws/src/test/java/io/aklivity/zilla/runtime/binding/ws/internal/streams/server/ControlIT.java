@@ -78,24 +78,4 @@ public class ControlIT
     {
         k3po.finish();
     }
-
-    @Test
-    @Configuration("server.yaml")
-    @Specification({
-        "${net}/client.send.ping.payload.length.0/handshake.request.and.frame",
-        "${app}/client.send.ping.payload.length.0/handshake.response" })
-    public void shouldReceiveClientPingFrameWithEmptyPayload() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("server.yaml")
-    @Specification({
-        "${net}/client.send.ping.payload.length.125/handshake.request.and.frame",
-        "${app}/client.send.ping.payload.length.125/handshake.response" })
-    public void shouldReceiveClientPingFrameWithPayload() throws Exception
-    {
-        k3po.finish();
-    }
 }

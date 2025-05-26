@@ -137,51 +137,6 @@ public class MergedIT
 
     @Test
     @Specification({
-        "${app}/merged.fetch.message.value.convert/client",
-        "${app}/merged.fetch.message.value.convert/server"})
-    public void shouldFetchMergedMessageValueConvert() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/merged.fetch.message.value.valid/client",
-        "${app}/merged.fetch.message.value.valid/server"})
-    public void shouldFetchMergedMessageValueValid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/merged.fetch.from.parameterized.topic.value.valid/client",
-        "${app}/merged.fetch.from.parameterized.topic.value.valid/server"})
-    public void shouldFetchMergedFromParameterizedTopicValid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/merged.fetch.from.parameterized.topic.value.invalid/client",
-        "${app}/merged.fetch.from.parameterized.topic.value.invalid/server"})
-    public void shouldFetchMergedFromParameterizedTopicInvalid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/merged.fetch.message.value.invalid/client",
-        "${app}/merged.fetch.message.value.invalid/server"})
-    public void shouldFetchMergedMessageValueInvalid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${app}/merged.fetch.message.values/client",
         "${app}/merged.fetch.message.values/server"})
     public void shouldFetchMergedMessageValues() throws Exception
@@ -431,42 +386,6 @@ public class MergedIT
 
     @Test
     @Specification({
-        "${app}/unmerged.fetch.message.value.convert/client",
-        "${app}/unmerged.fetch.message.value.convert/server"})
-    public void shouldFetchUnmergedMessageValueConvert() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.fetch.message.value.valid/client",
-        "${app}/unmerged.fetch.message.value.valid/server"})
-    public void shouldFetchUnmergedMessageValueValid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.fetch.from.parameterized.topic.value.valid/client",
-        "${app}/unmerged.fetch.from.parameterized.topic.value.valid/server"})
-    public void shouldFetchUnmergedFromParameterizedTopicValid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.fetch.from.parameterized.topic.value.invalid/client",
-        "${app}/unmerged.fetch.from.parameterized.topic.value.invalid/server"})
-    public void shouldFetchUnmergedFromParameterizedTopicInvalid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${app}/unmerged.fetch.message.values/client",
         "${app}/unmerged.fetch.message.values/server"})
     public void shouldFetchUnmergedMessageValues() throws Exception
@@ -629,15 +548,6 @@ public class MergedIT
         "${app}/unmerged.produce.message.value.invalid/client",
         "${app}/unmerged.produce.message.value.invalid/server"})
     public void shouldProduceUnmergedMessageValueInvalid() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.fetch.message.value.invalid/client",
-        "${app}/unmerged.fetch.message.value.invalid/server"})
-    public void shouldFetchUnmergedMessageValueInvalid() throws Exception
     {
         k3po.finish();
     }
@@ -836,41 +746,4 @@ public class MergedIT
     {
         k3po.finish();
     }
-
-    @Test
-    @Specification({
-        "${app}/merged.produce.message.values.producer.id/client",
-        "${app}/merged.produce.message.values.producer.id/server"})
-    public void shouldProduceMergedMessageValuesWithProducerId() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.produce.message.values.producer.id/client",
-        "${app}/unmerged.produce.message.values.producer.id/server"})
-    public void shouldProduceUnmergedMessageValuesWithProducerId() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/merged.produce.message.value.partition.id/client",
-        "${app}/merged.produce.message.value.partition.id/server"})
-    public void shouldProduceMergedMessageValueByGettingPartitionId() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/unmerged.produce.message.value.partition.id/client",
-        "${app}/unmerged.produce.message.value.partition.id/server"})
-    public void shouldProduceUnmergedMessageValueByGettingPartitionId() throws Exception
-    {
-        k3po.finish();
-    }
-
 }

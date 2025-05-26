@@ -48,15 +48,6 @@ public class SessionIT
 
     @Test
     @Specification({
-        "${app}/session.connect.redirect.support/client",
-        "${app}/session.connect.redirect.support/server"})
-    public void shouldConnectSupportSharding() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${app}/session.connect.authorization/client",
         "${app}/session.connect.authorization/server"})
     public void shouldConnectAndAuthorize() throws Exception
@@ -105,15 +96,6 @@ public class SessionIT
         "${app}/session.will.message.normal.disconnect/client",
         "${app}/session.will.message.normal.disconnect/server"})
     public void shouldSendReasonForEndAfterNormalClientDisconnect() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/session.will.message.10k/client",
-        "${app}/session.will.message.10k/server"})
-    public void shouldSendWillMessage10k() throws Exception
     {
         k3po.finish();
     }
@@ -223,24 +205,6 @@ public class SessionIT
         "${app}/session.subscribe.publish.routing/client",
         "${app}/session.subscribe.publish.routing/server"})
     public void shouldSubscribeAndPublishToNonDefaultRoute() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/session.invalid.session.timeout.after.connack/client",
-        "${app}/session.invalid.session.timeout.after.connack/server"})
-    public void shouldPropagateMqttReasonCodeAndStringAfterConnack() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${app}/session.invalid.session.timeout.before.connack/client",
-        "${app}/session.invalid.session.timeout.before.connack/server"})
-    public void shouldPropagateMqttReasonCodeAndStringBeforeConnack() throws Exception
     {
         k3po.finish();
     }

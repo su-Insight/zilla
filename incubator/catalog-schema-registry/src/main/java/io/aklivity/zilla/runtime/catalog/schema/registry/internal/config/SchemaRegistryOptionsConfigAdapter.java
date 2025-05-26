@@ -14,8 +14,6 @@
  */
 package io.aklivity.zilla.runtime.catalog.schema.registry.internal.config;
 
-import java.time.Duration;
-
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
@@ -28,7 +26,6 @@ public class SchemaRegistryOptionsConfigAdapter implements OptionsConfigAdapterS
 {
     private static final String URL = "url";
     private static final String CONTEXT = "context";
-    private static final String MAX_AGE_NAME = "max-age";
 
     @Override
     public Kind kind()
@@ -61,12 +58,6 @@ public class SchemaRegistryOptionsConfigAdapter implements OptionsConfigAdapterS
             catalog.add(CONTEXT, config.context);
         }
 
-        Duration maxAge = config.maxAge;
-        if (maxAge != null)
-        {
-            catalog.add(MAX_AGE_NAME, maxAge.toSeconds());
-        }
-
         return catalog.build();
     }
 
@@ -86,11 +77,6 @@ public class SchemaRegistryOptionsConfigAdapter implements OptionsConfigAdapterS
             if (object.containsKey(CONTEXT))
             {
                 options.context(object.getString(CONTEXT));
-            }
-
-            if (object.containsKey(MAX_AGE_NAME))
-            {
-                options.maxAge(Duration.ofSeconds(object.getJsonNumber(MAX_AGE_NAME).longValue()));
             }
         }
 

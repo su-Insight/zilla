@@ -50,8 +50,6 @@ public final class TestGuardHandler implements GuardHandler
 
     @Override
     public long reauthorize(
-        long traceId,
-        long bindingId,
         long contextId,
         String credentials)
     {

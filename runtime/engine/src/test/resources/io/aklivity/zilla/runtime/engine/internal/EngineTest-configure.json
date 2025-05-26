@@ -7,20 +7,7 @@
             "type" : "test"
         }
     },
-    "guards":
-    {
-        "authorized":
-        {
-            "type": "test"
-        }
-    },
-    "catalogs":
-    {
-        "managed":
-        {
-            "type": "test"
-        }
-    },
+
     "bindings":
     {
         "test0":

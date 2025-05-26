@@ -14,6 +14,9 @@
  */
 package io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
@@ -22,7 +25,6 @@ import jakarta.json.JsonObjectBuilder;
 import jakarta.json.bind.adapter.JsonbAdapter;
 
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaConditionConfig;
-import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaConditionConfigBuilder;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaConditionKind;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.MqttKafkaBinding;
 import io.aklivity.zilla.runtime.engine.config.ConditionConfig;
@@ -72,21 +74,30 @@ public class MqttKafkaConditionConfigAdapter implements ConditionConfigAdapterSp
     public ConditionConfig adaptFromJson(
         JsonObject object)
     {
-        MqttKafkaConditionConfigBuilder<MqttKafkaConditionConfig> builder = MqttKafkaConditionConfig.builder();
+        List<String> topics = new ArrayList<>();
+        MqttKafkaConditionKind kind = null;
 
         if (object.containsKey(SUBSCRIBE_NAME))
         {
-            builder.kind(MqttKafkaConditionKind.SUBSCRIBE);
+            kind = MqttKafkaConditionKind.SUBSCRIBE;
             JsonArray subscribesJson = object.getJsonArray(SUBSCRIBE_NAME);
-            subscribesJson.forEach(s -> builder.topic(s.asJsonObject().getString(TOPIC_NAME)));
+            subscribesJson.forEach(s ->
+            {
+                String topic = s.asJsonObject().getString(TOPIC_NAME);
+                topics.add(topic);
+            });
         }
         else if (object.containsKey(PUBLISH_NAME))
         {
-            builder.kind(MqttKafkaConditionKind.PUBLISH);
+            kind = MqttKafkaConditionKind.PUBLISH;
             JsonArray publishesJson = object.getJsonArray(PUBLISH_NAME);
-            publishesJson.forEach(p -> builder.topic(p.asJsonObject().getString(TOPIC_NAME)));
+            publishesJson.forEach(p ->
+            {
+                String topic = p.asJsonObject().getString(TOPIC_NAME);
+                topics.add(topic);
+            });
         }
 
-        return builder.build();
+        return new MqttKafkaConditionConfig(topics, kind);
     }
 }

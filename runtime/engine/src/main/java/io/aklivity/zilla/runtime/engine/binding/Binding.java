@@ -32,18 +32,6 @@ public interface Binding
         return null;
     }
 
-    default String originType(
-        KindConfig kind)
-    {
-        return null;
-    }
-
-    default String routedType(
-        KindConfig kind)
-    {
-        return null;
-    }
-
     default int workers(
         KindConfig kind)
     {

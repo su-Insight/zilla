@@ -22,7 +22,6 @@ write zilla:begin.ext ${mqtt:beginEx()
                               .publish()
                                 .clientId("client")
                                 .topic("sensor/one")
-                                .qos(1)
                                 .build()
                               .build()}
 

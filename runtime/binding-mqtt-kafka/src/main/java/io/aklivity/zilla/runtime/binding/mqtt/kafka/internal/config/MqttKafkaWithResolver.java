@@ -15,8 +15,6 @@
 package io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.config;
 
 
-import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaOptionsConfig;
-import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaWithConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.String16FW;
 
 public class MqttKafkaWithResolver

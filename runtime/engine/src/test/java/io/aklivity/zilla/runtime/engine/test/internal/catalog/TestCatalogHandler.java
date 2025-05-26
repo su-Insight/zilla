@@ -21,13 +21,11 @@ import io.aklivity.zilla.runtime.engine.test.internal.catalog.config.TestCatalog
 public class TestCatalogHandler implements CatalogHandler
 {
     private final String schema;
-    private final int id;
 
     public TestCatalogHandler(
         TestCatalogOptionsConfig options)
     {
-        this.id = options != null ? options.id : NO_SCHEMA_ID;
-        this.schema = options != null ? options.schema : null;
+        this.schema = options.schema;
     }
 
     @Override
@@ -36,7 +34,7 @@ public class TestCatalogHandler implements CatalogHandler
         String type,
         String schema)
     {
-        return id;
+        return 1;
     }
 
     @Override
@@ -44,13 +42,13 @@ public class TestCatalogHandler implements CatalogHandler
         String subject,
         String version)
     {
-        return id;
+        return 1;
     }
 
     @Override
     public String resolve(
         int schemaId)
     {
-        return schemaId == id ? schema : null;
+        return schema;
     }
 }

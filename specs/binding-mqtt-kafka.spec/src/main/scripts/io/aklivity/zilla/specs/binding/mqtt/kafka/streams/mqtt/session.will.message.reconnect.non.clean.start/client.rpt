@@ -22,7 +22,6 @@ write zilla:begin.ext ${mqtt:beginEx()
                            .session()
                               .flags("WILL")
                               .expiry(1)
-                              .capabilities("REDIRECT")
                               .clientId("one")
                               .build()
                            .build()}
@@ -38,9 +37,8 @@ write zilla:data.ext ${mqtt:dataEx()
 write ${mqtt:will()
                .topic("obituaries")
                .format("TEXT")
-               .payloadSize(30)
+               .payload("client-1 disconnected abruptly")
                .build()}
-"client-1 disconnected abruptly"
 write flush
 
 read zilla:data.empty
@@ -59,7 +57,6 @@ write zilla:begin.ext ${mqtt:beginEx()
                            .session()
                               .flags("WILL")
                               .expiry(1)
-                              .capabilities("REDIRECT")
                               .clientId("one")
                               .build()
                            .build()}
@@ -75,9 +72,8 @@ write zilla:data.ext ${mqtt:dataEx()
 write ${mqtt:will()
             .topic("obituaries")
             .format("TEXT")
-            .payloadSize(30)
+            .payload("client-1 disappeared abruptly")
             .build()}
-"client-1 disconnected abruptly"
 write flush
 
 read zilla:data.empty

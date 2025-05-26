@@ -59,10 +59,7 @@ public class HttpKafkaConditionConfigAdapterTest
     @Test
     public void shouldWriteCondition()
     {
-        HttpKafkaConditionConfig condition = HttpKafkaConditionConfig.builder()
-            .method("GET")
-            .path("/test")
-            .build();
+        HttpKafkaConditionConfig condition = new HttpKafkaConditionConfig("GET", "/test");
 
         String text = jsonb.toJson(condition);
 

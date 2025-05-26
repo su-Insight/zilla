@@ -23,7 +23,6 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.time.Instant.now;
 
 import java.util.function.Consumer;
-import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 
@@ -63,7 +62,6 @@ import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.binding.BindingHandler;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
 import io.aklivity.zilla.runtime.engine.buffer.BufferPool;
-import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
 import io.aklivity.zilla.runtime.engine.concurrent.Signaler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 
@@ -136,7 +134,6 @@ public final class GrpcServerFactory implements GrpcStreamFactory
     private final BufferPool bufferPool;
     private final Signaler signaler;
     private final BindingHandler streamFactory;
-    private final LongFunction<CatalogHandler> supplyCatalog;
     private final LongUnaryOperator supplyInitialId;
     private final LongUnaryOperator supplyReplyId;
     private final LongSupplier supplyTraceId;
@@ -238,7 +235,6 @@ public final class GrpcServerFactory implements GrpcStreamFactory
         this.bufferPool = context.bufferPool();
         this.signaler = context.signaler();
         this.streamFactory = context.streamFactory();
-        this.supplyCatalog = context::supplyCatalog;
         this.supplyInitialId = context::supplyInitialId;
         this.supplyReplyId = context::supplyReplyId;
         this.supplyTraceId = context::supplyTraceId;
@@ -263,7 +259,7 @@ public final class GrpcServerFactory implements GrpcStreamFactory
     public void attach(
         BindingConfig binding)
     {
-        GrpcBindingConfig grpcBinding = new GrpcBindingConfig(binding, metadataBuffer, supplyCatalog);
+        GrpcBindingConfig grpcBinding = new GrpcBindingConfig(binding, metadataBuffer);
         bindings.put(binding.id, grpcBinding);
     }
 
@@ -536,7 +532,7 @@ public final class GrpcServerFactory implements GrpcStreamFactory
                     messageDeferred = messageLength - payloadSize;
 
                     Flyweight dataEx = messageDeferred > 0 ?
-                        grpcDataExRW.wrap(extBuffer, 0, extBuffer.capacity())
+                        grpcDataExRW.wrap(writeBuffer, DataFW.FIELD_OFFSET_PAYLOAD, writeBuffer.capacity())
                             .typeId(grpcTypeId)
                             .deferred(messageDeferred)
                             .build() : EMPTY_OCTETS;
@@ -678,6 +674,8 @@ public final class GrpcServerFactory implements GrpcStreamFactory
             int replyMax)
         {
             this.replySeq = replySeq;
+            this.replyAck = replyAck;
+            this.replyMax = replyMax;
 
             doBegin(network, originId, routedId, replyId, replySeq, replyAck, replyMax, traceId, authorization,
                 affinity, hs -> hs.item(h -> h.name(HEADER_NAME_STATUS).value(HEADER_VALUE_STATUS_200))

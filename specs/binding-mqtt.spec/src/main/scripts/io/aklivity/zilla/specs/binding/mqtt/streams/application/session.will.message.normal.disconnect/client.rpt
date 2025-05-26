@@ -30,7 +30,7 @@ read zilla:begin.ext ${mqtt:matchBeginEx()
                               .typeId(zilla:id("mqtt"))
                               .session()
                                 .flags("WILL", "CLEAN_START")
-                                .subscribeQosMax(2)
+                                .qosMax(2)
                                 .packetSizeMax(66560)
                                 .capabilities("RETAIN", "WILDCARD", "SUBSCRIPTION_IDS", "SHARED_SUBSCRIPTIONS")
                                 .clientId("one")
@@ -48,9 +48,8 @@ write zilla:data.ext ${mqtt:dataEx()
 
 write ${mqtt:will()
                .topic("wills/one")
-               .payloadSize(26)
+               .payload("client one session expired")
                .build()}
-write "client one session expired"
 write flush
 
 read zilla:data.empty

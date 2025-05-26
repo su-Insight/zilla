@@ -30,7 +30,7 @@ import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import io.aklivity.zilla.runtime.engine.config.EngineConfig;
+import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
 
 public class FileWatcherTask extends WatcherTask
 {
@@ -39,8 +39,8 @@ public class FileWatcherTask extends WatcherTask
     private final Function<String, String> readURL;
 
     public FileWatcherTask(
-        BiFunction<URL, String, EngineConfig> changeListener,
-        Function<String, String> readURL)
+        Function<String, String> readURL,
+        BiFunction<URL, String, NamespaceConfig> changeListener)
     {
         super(changeListener);
         this.readURL = readURL;
@@ -103,7 +103,7 @@ public class FileWatcherTask extends WatcherTask
     }
 
     @Override
-    public CompletableFuture<EngineConfig> watch(
+    public CompletableFuture<NamespaceConfig> watch(
         URL configURL)
     {
         WatchedConfig watchedConfig = new WatchedConfig(configURL, watchService);
@@ -111,19 +111,12 @@ public class FileWatcherTask extends WatcherTask
         watchedConfig.keys().forEach(k -> watchedConfigs.put(k, watchedConfig));
         String configText = readURL.apply(configURL.toString());
         watchedConfig.setConfigHash(computeHash(configText));
-
-        CompletableFuture<EngineConfig> configFuture;
-        try
+        NamespaceConfig config = changeListener.apply(configURL, configText);
+        if (config == null)
         {
-            EngineConfig config = changeListener.apply(configURL, configText);
-            configFuture = CompletableFuture.completedFuture(config);
+            return CompletableFuture.failedFuture(new Exception("Parsing of the initial configuration failed."));
         }
-        catch (Exception ex)
-        {
-            configFuture = CompletableFuture.failedFuture(ex);
-        }
-
-        return configFuture;
+        return CompletableFuture.completedFuture(config);
     }
 
     @Override

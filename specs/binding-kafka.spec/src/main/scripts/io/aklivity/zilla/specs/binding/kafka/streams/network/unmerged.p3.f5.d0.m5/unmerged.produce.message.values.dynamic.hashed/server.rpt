@@ -47,7 +47,7 @@ read 238                                # size
          21s "max.compaction.lag.ms"
          25s "min.cleanable.dirty.ratio"
 
-write 372                               # size
+write 365                               # size
       ${requestId}
       0
       1                                 # resources
@@ -112,6 +112,10 @@ write 372                               # size
           [0x00]
           [0x00]
 
+accepted
+
+connected
+
 read 26                                 # size
      3s                                 # metadata
      5s                                 # v5
@@ -165,7 +169,7 @@ write 203                               # size
 
 accepted
 
-read zilla:begin.ext ${proxy:matchBeginEx()
+read zilla:begin.ext ${proxy:beginEx()
                               .typeId(zilla:id("proxy"))
                               .addressInet()
                                 .protocol("stream")
@@ -173,9 +177,6 @@ read zilla:begin.ext ${proxy:matchBeginEx()
                                 .destination("broker1.example.com")
                                 .sourcePort(0)
                                 .destinationPort(9092)
-                                .build()
-                              .info()
-                                .authority("broker1.example.com")
                                 .build()
                               .build()}
 
@@ -277,7 +278,7 @@ write 44
 
 accepted
 
-read zilla:begin.ext ${proxy:matchBeginEx()
+read zilla:begin.ext ${proxy:beginEx()
                               .typeId(zilla:id("proxy"))
                               .addressInet()
                                 .protocol("stream")
@@ -285,9 +286,6 @@ read zilla:begin.ext ${proxy:matchBeginEx()
                                 .destination("broker2.example.com")
                                 .sourcePort(0)
                                 .destinationPort(9092)
-                                .build()
-                              .info()
-                                .authority("broker2.example.com")
                                 .build()
                               .build()}
 
@@ -389,7 +387,7 @@ write 44
 
 accepted
 
-read zilla:begin.ext ${proxy:matchBeginEx()
+read zilla:begin.ext ${proxy:beginEx()
                               .typeId(zilla:id("proxy"))
                               .addressInet()
                                 .protocol("stream")
@@ -397,9 +395,6 @@ read zilla:begin.ext ${proxy:matchBeginEx()
                                 .destination("broker3.example.com")
                                 .sourcePort(0)
                                 .destinationPort(9092)
-                                .build()
-                              .info()
-                                .authority("broker3.example.com")
                                 .build()
                               .build()}
 

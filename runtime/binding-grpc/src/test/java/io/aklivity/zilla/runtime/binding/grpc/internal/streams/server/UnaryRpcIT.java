@@ -69,17 +69,6 @@ public class UnaryRpcIT
     }
 
     @Test
-    @Configuration("server.when.catalog.yaml")
-    @Specification({
-        "${net}/message.exchange/client",
-        "${app}/message.exchange/server"
-    })
-    public void shouldEstablishUnaryRpcFromCatalogSchema() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
     @Configuration("server.when.yaml")
     @Specification({
         "${net}/grpc.web/client",
@@ -155,17 +144,5 @@ public class UnaryRpcIT
     {
         k3po.finish();
     }
-
-    @Test
-    @Configuration("server.when.yaml")
-    @Specification({
-        "${net}/message.exchange.100k/client",
-        "${app}/message.exchange.100k/server"
-    })
-    public void shouldExchange100kMessage() throws Exception
-    {
-        k3po.finish();
-    }
-
 
 }

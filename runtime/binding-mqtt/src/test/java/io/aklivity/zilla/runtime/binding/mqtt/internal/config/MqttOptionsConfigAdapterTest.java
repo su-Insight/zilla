@@ -38,7 +38,7 @@ import io.aklivity.zilla.runtime.binding.mqtt.config.MqttCredentialsConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttOptionsConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttPatternConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttTopicConfig;
-import io.aklivity.zilla.runtime.engine.test.internal.model.config.TestModelConfig;
+import io.aklivity.zilla.runtime.engine.test.internal.validator.config.TestValidatorConfig;
 
 public class MqttOptionsConfigAdapterTest
 {
@@ -57,11 +57,6 @@ public class MqttOptionsConfigAdapterTest
     {
         String text =
                 "{" +
-                    "\"versions\":" +
-                    "[" +
-                        "v3.1.1," +
-                        "v5" +
-                    "]," +
                     "\"authorization\":" +
                     "{" +
                         "\"test0\":" +
@@ -100,23 +95,15 @@ public class MqttOptionsConfigAdapterTest
 
         MqttTopicConfig topic = options.topics.get(0);
         assertThat(topic.name, equalTo("sensor/one"));
-        assertThat(topic.content, instanceOf(TestModelConfig.class));
-        assertThat(topic.content.model, equalTo("test"));
-        assertThat(options.versions.get(0), equalTo(MqttVersion.V3_1_1));
-        assertThat(options.versions.get(1), equalTo(MqttVersion.V_5));
+        assertThat(topic.content, instanceOf(TestValidatorConfig.class));
+        assertThat(topic.content.type, equalTo("test"));
     }
 
     @Test
     public void shouldWriteOptions()
     {
         List<MqttTopicConfig> topics = new ArrayList<>();
-        topics.add(new MqttTopicConfig("sensor/one",
-            TestModelConfig.builder()
-                .length(0)
-                .build()));
-        List<MqttVersion> versions = new ArrayList<>();
-        versions.add(MqttVersion.V3_1_1);
-        versions.add(MqttVersion.V_5);
+        topics.add(new MqttTopicConfig("sensor/one", new TestValidatorConfig()));
 
         MqttOptionsConfig options = new MqttOptionsConfig(
                 new MqttAuthorizationConfig(
@@ -125,7 +112,7 @@ public class MqttOptionsConfigAdapterTest
                         singletonList(new MqttPatternConfig(
                             MqttPatternConfig.MqttConnectProperty.USERNAME,
                             "Bearer {credentials}")))),
-                    topics, versions);
+                    topics);
 
         String text = jsonb.toJson(options);
 
@@ -151,11 +138,6 @@ public class MqttOptionsConfigAdapterTest
                                 "\"name\":\"sensor/one\"," +
                                 "\"content\":\"test\"" +
                             "}" +
-                        "]," +
-                        "\"versions\":" +
-                        "[" +
-                            "\"v3.1.1\"," +
-                            "\"v5\"" +
                         "]" +
                     "}"));
     }

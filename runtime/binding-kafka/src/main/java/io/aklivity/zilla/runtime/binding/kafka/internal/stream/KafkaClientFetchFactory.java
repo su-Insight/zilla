@@ -32,7 +32,6 @@ import org.agrona.collections.LongLongConsumer;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaSaslConfig;
-import io.aklivity.zilla.runtime.binding.kafka.config.KafkaServerConfig;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaBinding;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaConfiguration;
 import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaBindingConfig;
@@ -247,7 +246,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
         MessageConsumer application)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long affinity = begin.affinity();
         final long originId = begin.originId();
         final long routedId = begin.routedId();
         final long initialId = begin.streamId();
@@ -280,9 +278,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                 final KafkaIsolation isolation = kafkaFetchBeginEx.isolation().get();
                 final KafkaSaslConfig sasl = binding.sasl();
 
-                final KafkaClientRoute clientRoute = supplyClientRoute.apply(resolvedId);
-                final KafkaServerConfig server = clientRoute.servers.get(affinity);
-
                 newStream = new KafkaFetchStream(
                     application,
                     originId,
@@ -295,7 +290,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                     leaderId,
                     initialOffset,
                     isolation,
-                    server,
                     sasl)::onApplication;
             }
         }
@@ -1679,8 +1673,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
             client.decoder = decodeFetchPartition;
         }
 
-        client.onIgnoreRecordSet(traceId);
-
         return progress;
     }
 
@@ -1753,7 +1745,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
             long leaderId,
             long initialOffset,
             KafkaIsolation isolation,
-            KafkaServerConfig server,
             KafkaSaslConfig sasl)
         {
             this.application = application;
@@ -1764,7 +1755,7 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
             this.leaderId = leaderId;
             this.clientRoute = supplyClientRoute.apply(resolvedId);
             this.client = new KafkaFetchClient(routedId, resolvedId, topic, partitionId,
-                    initialOffset, latestOffset, isolation, server, sasl);
+                    initialOffset, latestOffset, isolation, sasl);
         }
 
         private int replyBudget()
@@ -1983,36 +1974,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
             flushFramesSent++;
         }
 
-        private void doFlushPartitionOffsetIfNecessary(
-            long traceId,
-            long authorization)
-        {
-            if (KafkaState.replyOpening(state) &&
-                client.lastStableOffset < client.stableOffset ||
-                client.lastLatestOffset < client.latestOffset)
-            {
-                final KafkaFlushExFW kafkaFlushEx = kafkaFlushExRW.wrap(extBuffer, 0, extBuffer.capacity())
-                    .typeId(kafkaTypeId)
-                    .fetch(f -> f
-                        .partition(p -> p
-                            .partitionId(client.partitionId)
-                            .partitionOffset(client.decodeRecordBatchLastOffset)
-                            .stableOffset(client.stableOffset)
-                            .latestOffset(client.latestOffset)))
-                    .build();
-
-                doFlush(application, originId, routedId, replyId, replySeq, replyAck, replyMax,
-                    traceId, authorization, 0, kafkaFlushEx);
-
-                replySeq += 0;
-
-                assert replyAck <= replySeq;
-
-                client.lastStableOffset = client.stableOffset;
-                client.lastLatestOffset = client.latestOffset;
-            }
-        }
-
         private void doApplicationFlushIfNecessary(
             long traceId,
             long authorization)
@@ -2167,8 +2128,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
             private long latestOffset;
             private long initialLatestOffset;
             private long initialStableOffset;
-            private long lastLatestOffset;
-            private long lastStableOffset;
 
             private int state;
             private long authorization;
@@ -2224,10 +2183,9 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                 long initialOffset,
                 long latestOffset,
                 KafkaIsolation isolation,
-                KafkaServerConfig server,
                 KafkaSaslConfig sasl)
             {
-                super(server, sasl, originId, routedId);
+                super(sasl, originId, routedId);
                 this.stream = KafkaFetchStream.this;
                 this.topic = requireNonNull(topic);
                 this.topicPartitions = clientRoute.supplyPartitions(topic);
@@ -2467,16 +2425,17 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
 
                 Consumer<OctetsFW.Builder> extension = EMPTY_EXTENSION;
 
-                if (server != null)
+                final KafkaClientRoute clientRoute = supplyClientRoute.apply(routedId);
+                final KafkaBrokerInfo broker = clientRoute.brokers.get(affinity);
+                if (broker != null)
                 {
                     extension = e -> e.set((b, o, l) -> proxyBeginExRW.wrap(b, o, l)
                                                                       .typeId(proxyTypeId)
                                                                       .address(a -> a.inet(i -> i.protocol(p -> p.set(STREAM))
                                                                                                  .source("0.0.0.0")
-                                                                                                 .destination(server.host)
+                                                                                                 .destination(broker.host)
                                                                                                  .sourcePort(0)
-                                                                                                 .destinationPort(server.port)))
-                                                                      .infos(i -> i.item(ii -> ii.authority(server.host)))
+                                                                                                 .destinationPort(broker.port)))
                                                                       .build()
                                                                       .sizeof());
                 }
@@ -2949,7 +2908,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                     this.nextOffset = partitionOffset;
                     break;
                 default:
-                    onDecodeResponseErrorCode(traceId, originId, errorCode);
                     cleanupApplication(traceId, errorCode);
                     doNetworkEnd(traceId, authorization);
                     break;
@@ -2989,23 +2947,11 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                                     traceId, authorization, 0, EMPTY_OCTETS);
                         }
                     }
-                    else
-                    {
-                        onDecodeResponseErrorCode(traceId, originId, errorCode);
-                    }
 
                     cleanupApplication(traceId, errorCode);
                     doNetworkEnd(traceId, authorization);
                     break;
                 }
-            }
-
-            private void onDecodeResponseErrorCode(
-                long traceId,
-                long originId,
-                int errorCode)
-            {
-                super.onDecodeResponseErrorCode(traceId, originId, FETCH_API_KEY, FETCH_API_VERSION, errorCode);
             }
 
             private void onDecodeFetchTransactionAbort(
@@ -3164,12 +3110,6 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                         .build();
 
                 doApplicationData(traceId, authorization, FLAG_FIN, reserved, value, kafkaDataEx);
-            }
-
-            private void onIgnoreRecordSet(
-                long traceId)
-            {
-                doFlushPartitionOffsetIfNecessary(traceId, authorization);
             }
 
             @Override

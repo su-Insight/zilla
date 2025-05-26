@@ -147,13 +147,13 @@ public class TlsOptionsConfigAdapterTest
     {
         TlsOptionsConfig options = TlsOptionsConfig.builder()
             .inject(identity())
-            .trustcacerts(false)
+            .trustcacerts(true)
             .build();
 
         String text = jsonb.toJson(options);
 
         assertThat(text, not(nullValue()));
-        assertThat(text, equalTo("{\"trustcacerts\":false}"));
+        assertThat(text, equalTo("{\"trustcacerts\":true}"));
     }
 
     @Test

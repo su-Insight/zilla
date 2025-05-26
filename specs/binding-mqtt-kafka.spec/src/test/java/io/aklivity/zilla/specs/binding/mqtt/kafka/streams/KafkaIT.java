@@ -64,6 +64,15 @@ public class KafkaIT
 
     @Test
     @Specification({
+        "${kafka}/publish.server.sent.flush/client",
+        "${kafka}/publish.server.sent.flush/server"})
+    public void shouldPublishReceiveServerSentFlush() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${kafka}/publish.server.sent.reset/client",
         "${kafka}/publish.server.sent.reset/server"})
     public void shouldPublishReceiveServerSentReset() throws Exception
@@ -85,6 +94,15 @@ public class KafkaIT
         "${kafka}/publish.retained.server.sent.abort/client",
         "${kafka}/publish.retained.server.sent.abort/server"})
     public void shouldPublishReceiveServerSentRetainedAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.retained.server.sent.flush/client",
+        "${kafka}/publish.retained.server.sent.flush/server"})
+    public void shouldPublishReceiveServerSentRetainedFlush() throws Exception
     {
         k3po.finish();
     }
@@ -130,24 +148,6 @@ public class KafkaIT
         "${kafka}/publish.one.message.changed.topic.name/client",
         "${kafka}/publish.one.message.changed.topic.name/server"})
     public void shouldSendOneMessageWithChangedTopicName() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.10k/client",
-        "${kafka}/publish.10k/server"})
-    public void shouldSendMessage10k() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.retained.10k/client",
-        "${kafka}/publish.retained.10k/server"})
-    public void shouldSendRetainedMessage10k() throws Exception
     {
         k3po.finish();
     }
@@ -343,15 +343,6 @@ public class KafkaIT
 
     @Test
     @Specification({
-        "${kafka}/subscribe.one.message.fragmented/client",
-        "${kafka}/subscribe.one.message.fragmented/server"})
-    public void shouldReceiveOneMessageFragmented() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${kafka}/subscribe.one.message.changed.topic.name/client",
         "${kafka}/subscribe.one.message.changed.topic.name/server"})
     public void shouldReceiveOneMessageWithChangedTopicName() throws Exception
@@ -391,15 +382,6 @@ public class KafkaIT
         "${kafka}/subscribe.retain/client",
         "${kafka}/subscribe.retain/server"})
     public void shouldReceiveRetained() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/subscribe.retain.fragmented/client",
-        "${kafka}/subscribe.retain.fragmented/server"})
-    public void shouldReceiveRetainedFragmented() throws Exception
     {
         k3po.finish();
     }
@@ -694,15 +676,6 @@ public class KafkaIT
 
     @Test
     @Specification({
-        "${kafka}/session.will.message.10k.abort.deliver.will/client",
-        "${kafka}/session.will.message.10k.abort.deliver.will/server"})
-    public void shouldSendWillMessage10kOnAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${kafka}/session.will.message.normal.disconnect/client",
         "${kafka}/session.will.message.normal.disconnect/server"})
     public void shouldNotSendWillMessageOnNormalDisconnect() throws Exception
@@ -847,94 +820,6 @@ public class KafkaIT
 
     @Test
     @Specification({
-        "${kafka}/publish.qos2.retained/client",
-        "${kafka}/publish.qos2.retained/server"})
-    public void shouldPublishQoS2MessageRetained() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.recovery/client",
-        "${kafka}/publish.qos2.recovery/server"})
-    public void shouldPublishQoS2MessageDuringRecovery() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.meta.abort/client",
-        "${kafka}/publish.qos2.meta.abort/server"})
-    public void shouldSessionReceiveQos2MetaSentAbort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.offset.fetch.abort/client",
-        "${kafka}/publish.qos2.offset.fetch.abort/server"})
-    public void shouldSessionReceiveQos2OffsetFetchSentAbort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.init.producer.abort/client",
-        "${kafka}/publish.qos2.init.producer.abort/server"})
-    public void shouldSessionReceiveQos2InitProducerSentAbort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.offset.commit.abort.phase1/client",
-        "${kafka}/publish.qos2.offset.commit.abort.phase1/server"})
-    public void shouldPublishReceiveQos2OffsetCommitSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.qos2.offset.commit.abort.phase2/client",
-        "${kafka}/publish.qos2.offset.commit.abort.phase2/server"})
-    public void shouldSessionReceiveQos2OffsetCommitSentAbort() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.mixture.qos/client",
-        "${kafka}/publish.mixture.qos/server"})
-    public void shouldSendMessageMixtureQos() throws Exception
-    {
-        k3po.start();
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.reject.large.message/client",
-        "${kafka}/publish.reject.large.message/server"})
-    public void shouldRejectLargeMessage() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${kafka}/subscribe.receive.message.qos1/client",
         "${kafka}/subscribe.receive.message.qos1/server"})
     public void shouldReceiveMessageQoS1() throws Exception
@@ -1019,24 +904,6 @@ public class KafkaIT
         "${kafka}/subscribe.receive.message.overlapping.wildcard.mixed.qos/client",
         "${kafka}/subscribe.receive.message.overlapping.wildcard.mixed.qos/server"})
     public void shouldReceiveMessageOverlappingWildcardMixedQos() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/subscribe.expire.message/client",
-        "${kafka}/subscribe.expire.message/server"})
-    public void shouldExpireMessage() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/subscribe.expire.message.fragmented/client",
-        "${kafka}/subscribe.expire.message.fragmented/server"})
-    public void shouldExpireMessageFragmented() throws Exception
     {
         k3po.finish();
     }

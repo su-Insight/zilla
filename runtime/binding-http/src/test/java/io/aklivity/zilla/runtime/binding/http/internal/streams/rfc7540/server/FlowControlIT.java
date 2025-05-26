@@ -60,7 +60,7 @@ public class FlowControlIT
         k3po.finish();
     }
 
-    @Ignore("Github Actions")
+    @Ignore("Address issue/134")
     @Test
     @Configuration("server.yaml")
     @Specification({

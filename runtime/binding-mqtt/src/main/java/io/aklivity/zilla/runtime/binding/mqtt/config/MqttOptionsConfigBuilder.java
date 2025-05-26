@@ -19,7 +19,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Function;
 
-import io.aklivity.zilla.runtime.binding.mqtt.internal.config.MqttVersion;
 import io.aklivity.zilla.runtime.engine.config.ConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.OptionsConfig;
 
@@ -29,7 +28,6 @@ public class MqttOptionsConfigBuilder<T> extends ConfigBuilder<T, MqttOptionsCon
 
     private MqttAuthorizationConfig authorization;
     private List<MqttTopicConfig> topics;
-    private List<MqttVersion> versions;
 
     MqttOptionsConfigBuilder(
         Function<OptionsConfig, T> mapper)
@@ -67,28 +65,6 @@ public class MqttOptionsConfigBuilder<T> extends ConfigBuilder<T, MqttOptionsCon
         return this;
     }
 
-    public MqttOptionsConfigBuilder<T> versions(
-        List<MqttVersion> versions)
-    {
-        if (versions == null)
-        {
-            versions = new LinkedList<>();
-        }
-        this.versions = versions;
-        return this;
-    }
-
-    public MqttOptionsConfigBuilder<T> version(
-        MqttVersion version)
-    {
-        if (this.versions == null)
-        {
-            this.versions = new LinkedList<>();
-        }
-        this.versions.add(version);
-        return this;
-    }
-
     public MqttTopicConfigBuilder<MqttOptionsConfigBuilder<T>> topic()
     {
         return new MqttTopicConfigBuilder<>(this::topic);
@@ -109,6 +85,6 @@ public class MqttOptionsConfigBuilder<T> extends ConfigBuilder<T, MqttOptionsCon
     @Override
     public T build()
     {
-        return mapper.apply(new MqttOptionsConfig(authorization, topics, versions));
+        return mapper.apply(new MqttOptionsConfig(authorization, topics));
     }
 }

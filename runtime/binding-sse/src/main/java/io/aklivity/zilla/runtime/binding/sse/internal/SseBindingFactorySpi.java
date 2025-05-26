@@ -21,7 +21,7 @@ import io.aklivity.zilla.runtime.engine.binding.BindingFactorySpi;
 public final class SseBindingFactorySpi implements BindingFactorySpi
 {
     @Override
-    public String type()
+    public String name()
     {
         return SseBinding.NAME;
     }

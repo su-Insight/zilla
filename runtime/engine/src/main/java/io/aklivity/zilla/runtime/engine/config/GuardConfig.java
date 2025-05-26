@@ -25,9 +25,7 @@ public class GuardConfig
     public transient long id;
     public transient Function<String, String> readURL;
 
-    public final String namespace;
     public final String name;
-    public final String qname;
     public final String type;
     public final OptionsConfig options;
 
@@ -37,14 +35,11 @@ public class GuardConfig
     }
 
     GuardConfig(
-        String namespace,
         String name,
         String type,
         OptionsConfig options)
     {
-        this.namespace = requireNonNull(namespace);
         this.name = requireNonNull(name);
-        this.qname = String.format("%s:%s", namespace, name);
         this.type = requireNonNull(type);
         this.options = options;
     }

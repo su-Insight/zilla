@@ -35,7 +35,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
     private long timestamp;
 
     private final KafkaCacheFile logFile;
-    private final KafkaCacheFile convertedFile;
     private final KafkaCacheFile deltaFile;
     private final KafkaCacheIndexFile indexFile;
     private final KafkaCacheIndexFile hashFile;
@@ -79,7 +78,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
         this.lastOffset = OFFSET_LIVE;
         this.timestamp = currentTimeMillis();
         this.logFile = new KafkaCacheFile.Log(location, baseOffset, config.segmentBytes, appendBuf);
-        this.convertedFile = new KafkaCacheFile.Converted(location, baseOffset, config.segmentBytes, appendBuf);
         this.deltaFile = new KafkaCacheFile.Delta(location, baseOffset, config.segmentBytes, appendBuf);
         this.indexFile = new KafkaCacheFile.Index(location, baseOffset, config.segmentIndexBytes, appendBuf);
         this.hashFile = new KafkaCacheFile.HashScan(location, baseOffset, config.segmentIndexBytes, appendBuf, sortSpaceRef);
@@ -101,7 +99,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
         this.lastOffset = lastOffset;
         this.timestamp = currentTimeMillis();
         this.logFile = new KafkaCacheFile.Log(location, baseOffset);
-        this.convertedFile = new KafkaCacheFile.Converted(location, baseOffset);
         this.deltaFile = new KafkaCacheFile.Delta(location, baseOffset);
         this.indexFile = new KafkaCacheFile.Index(location, baseOffset);
         this.hashFile = new KafkaCacheFile.HashIndex(location, baseOffset);
@@ -156,11 +153,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
         return logFile;
     }
 
-    public KafkaCacheFile convertedFile()
-    {
-        return convertedFile;
-    }
-
     public KafkaCacheFile deltaFile()
     {
         return deltaFile;
@@ -189,7 +181,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
     public KafkaCacheSegment freeze()
     {
         logFile.freeze();
-        convertedFile.freeze();
         deltaFile.freeze();
         indexFile.freeze();
         hashFile.freeze();
@@ -211,7 +202,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
         indexFile.delete();
         hashFile.delete();
         nullsFile.delete();
-        convertedFile.delete();
         deltaFile.delete();
         keysFile.delete();
     }
@@ -268,7 +258,6 @@ public final class KafkaCacheSegment extends KafkaCacheObject<KafkaCacheSegment>
         indexFile.close();
         hashFile.close();
         nullsFile.close();
-        convertedFile.close();
         deltaFile.close();
         keysFile.close();
     }

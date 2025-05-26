@@ -17,16 +17,16 @@ package io.aklivity.zilla.runtime.binding.mqtt.config;
 
 import static java.util.function.Function.identity;
 
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 
 public class MqttTopicConfig
 {
     public final String name;
-    public final ModelConfig content;
+    public final ValidatorConfig content;
 
     public MqttTopicConfig(
         String name,
-        ModelConfig content)
+        ValidatorConfig content)
     {
         this.name = name;
         this.content = content;

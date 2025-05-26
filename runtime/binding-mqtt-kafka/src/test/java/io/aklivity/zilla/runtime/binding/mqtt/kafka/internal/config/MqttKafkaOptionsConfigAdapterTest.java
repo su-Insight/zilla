@@ -28,8 +28,7 @@ import jakarta.json.bind.JsonbConfig;
 import org.junit.Before;
 import org.junit.Test;
 
-import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaOptionsConfig;
-import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaTopicsConfig;
+import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.String16FW;
 
 public class MqttKafkaOptionsConfigAdapterTest
 {
@@ -79,15 +78,13 @@ public class MqttKafkaOptionsConfigAdapterTest
     @Test
     public void shouldWriteOptions()
     {
-        MqttKafkaOptionsConfig options = MqttKafkaOptionsConfig.builder()
-            .topics(MqttKafkaTopicsConfig.builder()
-                .sessions("sessions")
-                .messages("messages")
-                .retained("retained")
-                .build())
-            .serverRef("mqtt-1.example.com:1883")
-            .clients(Arrays.asList("/clients/{identity}/#", "/department/clients/{identity}/#"))
-            .build();
+        MqttKafkaOptionsConfig options = new MqttKafkaOptionsConfig(
+            new MqttKafkaTopicsConfig(
+                new String16FW("sessions"),
+                new String16FW("messages"),
+                new String16FW("retained")),
+            "mqtt-1.example.com:1883",
+            Arrays.asList("/clients/{identity}/#", "/department/clients/{identity}/#"));
 
         String text = jsonb.toJson(options);
 
@@ -134,13 +131,11 @@ public class MqttKafkaOptionsConfigAdapterTest
     @Test
     public void shouldWriteOptionsWithoutClients()
     {
-        MqttKafkaOptionsConfig options = MqttKafkaOptionsConfig.builder()
-            .topics(MqttKafkaTopicsConfig.builder()
-                .sessions("sessions")
-                .messages("messages")
-                .retained("retained")
-                .build())
-            .build();
+        MqttKafkaOptionsConfig options = new MqttKafkaOptionsConfig(
+            new MqttKafkaTopicsConfig(
+                new String16FW("sessions"),
+                new String16FW("messages"),
+                new String16FW("retained")), null, null);
 
         String text = jsonb.toJson(options);
 

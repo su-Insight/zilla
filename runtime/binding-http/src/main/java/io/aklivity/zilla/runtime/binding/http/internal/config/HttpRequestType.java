@@ -22,8 +22,7 @@ import java.util.regex.Pattern;
 
 import io.aklivity.zilla.runtime.binding.http.config.HttpRequestConfig;
 import io.aklivity.zilla.runtime.binding.http.internal.types.String8FW;
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
-import io.aklivity.zilla.runtime.engine.model.ValidatorHandler;
+import io.aklivity.zilla.runtime.engine.validator.Validator;
 
 public final class HttpRequestType
 {
@@ -34,23 +33,20 @@ public final class HttpRequestType
     private static final Pattern QUERY_PATTERN = Pattern.compile(QUERY_REGEX);
     private static final String EMPTY_INPUT = "";
 
-    // request selectors
+    // selectors
     public final String path;
     public final HttpRequestConfig.Method method;
     public final List<String> contentType;
 
-    // request matchers
+    // matchers
     public final Matcher pathMatcher;
     public final Matcher queryMatcher;
 
     // validators
-    public final Map<String8FW, ValidatorHandler> headers;
-    public final Map<String, ValidatorHandler> pathParams;
-    public final Map<String, ValidatorHandler> queryParams;
-    public final ModelConfig content;
-
-    // responses
-    public final List<Response> responses;
+    public final Map<String8FW, Validator> headers;
+    public final Map<String, Validator> pathParams;
+    public final Map<String, Validator> queryParams;
+    public final Validator content;
 
     private HttpRequestType(
         String path,
@@ -58,11 +54,10 @@ public final class HttpRequestType
         List<String> contentType,
         Matcher pathMatcher,
         Matcher queryMatcher,
-        Map<String8FW, ValidatorHandler> headers,
-        Map<String, ValidatorHandler> pathParams,
-        Map<String, ValidatorHandler> queryParams,
-        ModelConfig content,
-        List<Response> responses)
+        Map<String8FW, Validator> headers,
+        Map<String, Validator> pathParams,
+        Map<String, Validator> queryParams,
+        Validator content)
     {
         this.path = path;
         this.method = method;
@@ -73,27 +68,6 @@ public final class HttpRequestType
         this.pathParams = pathParams;
         this.queryParams = queryParams;
         this.content = content;
-        this.responses = responses;
-    }
-
-    public static final class Response
-    {
-        public final List<String> status;
-        public final List<String> contentType;
-        public final Map<String8FW, ValidatorHandler> headers;
-        public final ModelConfig content;
-
-        public Response(
-            List<String> status,
-            List<String> contentType,
-            Map<String8FW, ValidatorHandler> headers,
-            ModelConfig content)
-        {
-            this.status = status;
-            this.contentType = contentType;
-            this.headers = headers;
-            this.content = content;
-        }
     }
 
     public static Builder builder()
@@ -106,11 +80,10 @@ public final class HttpRequestType
         private String path;
         private HttpRequestConfig.Method method;
         private List<String> contentType;
-        private Map<String8FW, ValidatorHandler> headers;
-        private Map<String, ValidatorHandler> pathParams;
-        private Map<String, ValidatorHandler> queryParams;
-        private ModelConfig content;
-        private List<Response> responses;
+        private Map<String8FW, Validator> headers;
+        private Map<String, Validator> pathParams;
+        private Map<String, Validator> queryParams;
+        private Validator content;
 
         public Builder path(
             String path)
@@ -134,37 +107,30 @@ public final class HttpRequestType
         }
 
         public Builder headers(
-            Map<String8FW, ValidatorHandler> headers)
+            Map<String8FW, Validator> headers)
         {
             this.headers = headers;
             return this;
         }
 
         public Builder pathParams(
-            Map<String, ValidatorHandler> pathParams)
+            Map<String, Validator> pathParams)
         {
             this.pathParams = pathParams;
             return this;
         }
 
         public Builder queryParams(
-            Map<String, ValidatorHandler> queryParams)
+            Map<String, Validator> queryParams)
         {
             this.queryParams = queryParams;
             return this;
         }
 
         public Builder content(
-            ModelConfig content)
+            Validator content)
         {
             this.content = content;
-            return this;
-        }
-
-        public Builder responses(
-            List<Response> responses)
-        {
-            this.responses = responses;
             return this;
         }
 
@@ -174,7 +140,7 @@ public final class HttpRequestType
             Matcher pathMatcher = Pattern.compile(pathPattern).matcher(EMPTY_INPUT);
             Matcher queryMatcher = QUERY_PATTERN.matcher(EMPTY_INPUT);
             return new HttpRequestType(path, method, contentType, pathMatcher, queryMatcher, headers, pathParams, queryParams,
-                content, responses);
+                content);
         }
     }
 }

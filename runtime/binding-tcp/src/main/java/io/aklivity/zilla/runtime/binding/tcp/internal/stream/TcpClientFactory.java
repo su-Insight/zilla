@@ -138,7 +138,6 @@ public class TcpClientFactory implements TcpStreamFactory
         MessageConsumer application)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long traceId = begin.traceId();
         final long originId = begin.originId();
         final long routedId = begin.routedId();
         final long authorization = begin.authorization();
@@ -152,7 +151,7 @@ public class TcpClientFactory implements TcpStreamFactory
         TcpBindingConfig binding = router.lookup(routedId);
         if (binding != null)
         {
-            route = router.resolve(binding, traceId, authorization, beginEx);
+            route = router.resolve(binding, authorization, beginEx);
         }
 
         MessageConsumer newStream = null;
@@ -256,9 +255,7 @@ public class TcpClientFactory implements TcpStreamFactory
             try
             {
                 state = TcpState.openingInitial(state);
-                net.setOption(SO_KEEPALIVE, options != null && options.keepalive);
-
-                networkKey = supplyPollerKey.apply(net);
+                net.setOption(SO_KEEPALIVE, options.keepalive);
 
                 if (net.connect(remoteAddress))
                 {
@@ -266,6 +263,7 @@ public class TcpClientFactory implements TcpStreamFactory
                 }
                 else
                 {
+                    networkKey = supplyPollerKey.apply(net);
                     networkKey.handler(OP_CONNECT, this::onNetConnect);
                     networkKey.register(OP_CONNECT);
                 }
@@ -285,7 +283,7 @@ public class TcpClientFactory implements TcpStreamFactory
                 net.finishConnect();
                 onNetConnected();
             }
-            catch (IOException ex)
+            catch (UnresolvedAddressException | IOException ex)
             {
                 onNetRejected();
             }
@@ -323,12 +321,11 @@ public class TcpClientFactory implements TcpStreamFactory
         private int onNetReadable(
             PollerKey key)
         {
-            assert replyMax > replyPad;
-            assert replySeq >= replyAck;
+            final int replyBudget = (int) Math.max(replyMax - (replySeq - replyAck), 0L);
 
-            final int replyNoAck = (int)(replySeq - replyAck);
-            final int replyBudget = Math.max(replyMax - replyPad - replyNoAck, 0);
-            final int limit = Math.min(replyBudget, readBuffer.capacity());
+            assert replyBudget > replyPad;
+
+            final int limit = Math.min(replyBudget - replyPad, readBuffer.capacity());
 
             ((Buffer) readByteBuffer).position(0);
             ((Buffer) readByteBuffer).limit(limit);

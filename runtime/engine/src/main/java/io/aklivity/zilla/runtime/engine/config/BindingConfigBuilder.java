@@ -25,13 +25,10 @@ import java.util.function.Function;
 public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfigBuilder<T>>
 {
     public static final List<RouteConfig> ROUTES_DEFAULT = emptyList();
-    public static final List<CatalogedConfig> CATALOGS_DEFAULT = emptyList();
-    public static final List<NamespaceConfig> COMPOSITES_DEFAULT = emptyList();
 
     private final Function<BindingConfig, T> mapper;
 
     private String vault;
-    private String namespace;
     private String name;
     private String type;
     private KindConfig kind;
@@ -39,9 +36,7 @@ public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfi
     private String exit;
     private OptionsConfig options;
     private List<RouteConfig> routes;
-    private List<CatalogedConfig> catalogs;
-    private TelemetryRefConfig telemetryRef;
-    private List<NamespaceConfig> composites;
+    private TelemetryRefConfig telemetry;
 
     BindingConfigBuilder(
         Function<BindingConfig, T> mapper)
@@ -60,13 +55,6 @@ public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfi
         String vault)
     {
         this.vault = vault;
-        return this;
-    }
-
-    public BindingConfigBuilder<T> namespace(
-        String namespace)
-    {
-        this.namespace = namespace;
         return this;
     }
 
@@ -118,30 +106,6 @@ public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfi
         return this;
     }
 
-    public BindingConfigBuilder<T> catalogs(
-        List<CatalogedConfig> catalogs)
-    {
-        this.catalogs = catalogs;
-        return this;
-    }
-
-    public CatalogedConfigBuilder<BindingConfigBuilder<T>> catalog()
-    {
-        return new CatalogedConfigBuilder<>(this::catalog);
-    }
-
-    public BindingConfigBuilder<T> catalog(
-        CatalogedConfig catalog)
-    {
-        if (catalogs == null)
-        {
-            catalogs = new LinkedList<>();
-        }
-
-        catalogs.add(catalog);
-        return this;
-    }
-
     public RouteConfigBuilder<BindingConfigBuilder<T>> route()
     {
         return new RouteConfigBuilder<>(this::route)
@@ -162,45 +126,15 @@ public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfi
         return this;
     }
 
-    public BindingConfigBuilder<T> routes(
-        List<RouteConfig> routes)
-    {
-        routes.forEach(this::route);
-        return this;
-    }
-
     public TelemetryRefConfigBuilder<BindingConfigBuilder<T>> telemetry()
     {
         return new TelemetryRefConfigBuilder<>(this::telemetry);
     }
 
     public BindingConfigBuilder<T> telemetry(
-        TelemetryRefConfig telemetryRef)
+        TelemetryRefConfig telemetry)
     {
-        this.telemetryRef = telemetryRef;
-        return this;
-    }
-
-    public NamespaceConfigBuilder<BindingConfigBuilder<T>> composite()
-    {
-        return new NamespaceConfigBuilder<>(this::composite);
-    }
-
-    public BindingConfigBuilder<T> composite(
-        NamespaceConfig composite)
-    {
-        if (composites == null)
-        {
-            composites = new LinkedList<>();
-        }
-        composites.add(composite);
-        return this;
-    }
-
-    public BindingConfigBuilder<T> composites(
-        List<NamespaceConfig> composites)
-    {
-        composites.forEach(this::composite);
+        this.telemetry = telemetry;
         return this;
     }
 
@@ -215,16 +149,13 @@ public final class BindingConfigBuilder<T> extends ConfigBuilder<T, BindingConfi
         }
 
         return mapper.apply(new BindingConfig(
-            namespace,
+            vault,
             name,
             type,
             kind,
             entry,
-            vault,
             options,
-            Optional.ofNullable(catalogs).orElse(CATALOGS_DEFAULT),
             Optional.ofNullable(routes).orElse(ROUTES_DEFAULT),
-            telemetryRef,
-            Optional.ofNullable(composites).orElse(COMPOSITES_DEFAULT)));
+            telemetry));
     }
 }

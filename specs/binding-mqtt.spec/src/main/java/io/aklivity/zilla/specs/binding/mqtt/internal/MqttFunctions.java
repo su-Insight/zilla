@@ -19,13 +19,11 @@ import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.PrimitiveIterator;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
+import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -55,6 +53,7 @@ import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttBeginExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttDataExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttExtensionKind;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttFlushExFW;
+import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttOffsetMetadataFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttOffsetStateFlags;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttPublishBeginExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttPublishDataExFW;
@@ -63,7 +62,6 @@ import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttServerCapa
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSessionBeginExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSessionDataExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSessionDataKind;
-import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSessionFlushExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSubscribeBeginExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSubscribeDataExFW;
 import io.aklivity.zilla.specs.binding.mqtt.internal.types.stream.MqttSubscribeFlushExFW;
@@ -113,12 +111,6 @@ public final class MqttFunctions
     }
 
     @Function
-    public static MqttFlushExMatcherBuilder matchFlushEx()
-    {
-        return new MqttFlushExMatcherBuilder();
-    }
-
-    @Function
     public static MqttResetExBuilder resetEx()
     {
         return new MqttResetExBuilder();
@@ -128,6 +120,12 @@ public final class MqttFunctions
     public static MqttSessionStateBuilder session()
     {
         return new MqttSessionStateBuilder();
+    }
+
+    @Function
+    public static MqttOffsetMetadataBuilder metadata()
+    {
+        return new MqttOffsetMetadataBuilder();
     }
 
     @Function
@@ -226,13 +224,6 @@ public final class MqttFunctions
                 return this;
             }
 
-            public MqttSessionBeginExBuilder packetId(
-                int packetId)
-            {
-                sessionBeginExRW.appendPacketIds((short) packetId);
-                return this;
-            }
-
             public MqttSessionBeginExBuilder expiry(
                 int expiry)
             {
@@ -240,17 +231,10 @@ public final class MqttFunctions
                 return this;
             }
 
-            public MqttSessionBeginExBuilder subscribeQosMax(
-                int subscribeQosMax)
+            public MqttSessionBeginExBuilder qosMax(
+                int qosMax)
             {
-                sessionBeginExRW.subscribeQosMax(subscribeQosMax);
-                return this;
-            }
-
-            public MqttSessionBeginExBuilder publishQosMax(
-                int publishQosMax)
-            {
-                sessionBeginExRW.publishQosMax(publishQosMax);
+                sessionBeginExRW.qosMax(qosMax);
                 return this;
             }
 
@@ -379,13 +363,6 @@ public final class MqttFunctions
                     .mapToInt(flag -> 1 << MqttPublishFlags.valueOf(flag).ordinal())
                     .reduce(0, (a, b) -> a | b);
                 publishBeginExRW.flags(flags);
-                return this;
-            }
-
-            public MqttPublishBeginExBuilder qos(
-                int qos)
-            {
-                publishBeginExRW.qos(qos);
                 return this;
             }
 
@@ -562,13 +539,6 @@ public final class MqttFunctions
                 publishDataExRW.wrap(writeBuffer, MqttBeginExFW.FIELD_OFFSET_PUBLISH, writeBuffer.capacity());
             }
 
-            public MqttPublishDataExBuilder deferred(
-                int deferred)
-            {
-                publishDataExRW.deferred(deferred);
-                return this;
-            }
-
             public MqttPublishDataExBuilder qos(
                 String qos)
             {
@@ -583,13 +553,6 @@ public final class MqttFunctions
                     .mapToInt(flag -> 1 << MqttPublishFlags.valueOf(flag).ordinal())
                     .reduce(0, (a, b) -> a | b);
                 publishDataExRW.flags(flags);
-                return this;
-            }
-
-            public MqttPublishDataExBuilder packetId(
-                int packetId)
-            {
-                publishDataExRW.packetId(packetId);
                 return this;
             }
 
@@ -660,13 +623,6 @@ public final class MqttFunctions
                 sessionDataExRW.wrap(writeBuffer, MqttBeginExFW.FIELD_OFFSET_SESSION, writeBuffer.capacity());
             }
 
-            public MqttSessionDataExBuilder deferred(
-                int deferred)
-            {
-                sessionDataExRW.deferred(deferred);
-                return this;
-            }
-
             public MqttSessionDataExBuilder kind(
                 String kind)
             {
@@ -703,42 +659,11 @@ public final class MqttFunctions
             return this;
         }
 
-        public MqttSessionFlushExBuilder session()
-        {
-            flushExRW.kind(MqttExtensionKind.SESSION.value());
-
-            return new MqttSessionFlushExBuilder();
-        }
-
         public MqttSubscribeFlushExBuilder subscribe()
         {
             flushExRW.kind(MqttExtensionKind.SUBSCRIBE.value());
 
             return new MqttSubscribeFlushExBuilder();
-        }
-
-        public final class MqttSessionFlushExBuilder
-        {
-            private final MqttSessionFlushExFW.Builder sessionFlushExRW = new MqttSessionFlushExFW.Builder();
-
-            private MqttSessionFlushExBuilder()
-            {
-                sessionFlushExRW.wrap(writeBuffer, MqttFlushExFW.FIELD_OFFSET_SESSION, writeBuffer.capacity());
-            }
-
-            public MqttSessionFlushExBuilder packetId(
-                int packetId)
-            {
-                sessionFlushExRW.packetId(packetId);
-                return this;
-            }
-
-            public MqttFlushExBuilder build()
-            {
-                final MqttSessionFlushExFW sessionFlushEx = sessionFlushExRW.build();
-                flushExRO.wrap(writeBuffer, 0, sessionFlushEx.limit());
-                return MqttFlushExBuilder.this;
-            }
         }
 
         public final class MqttSubscribeFlushExBuilder
@@ -747,7 +672,7 @@ public final class MqttFunctions
 
             private MqttSubscribeFlushExBuilder()
             {
-                subscribeFlushExRW.wrap(writeBuffer, MqttFlushExFW.FIELD_OFFSET_SUBSCRIBE, writeBuffer.capacity());
+                subscribeFlushExRW.wrap(writeBuffer, MqttBeginExFW.FIELD_OFFSET_PUBLISH, writeBuffer.capacity());
             }
 
             public MqttSubscribeFlushExBuilder packetId(
@@ -841,13 +766,6 @@ public final class MqttFunctions
             return this;
         }
 
-        public MqttResetExBuilder reason(
-            String reason)
-        {
-            resetExRW.reason(reason);
-            return this;
-        }
-
         public byte[] build()
         {
             final MqttResetExFW resetEx = resetExRW.build();
@@ -911,6 +829,32 @@ public final class MqttFunctions
             final byte[] array = new byte[sessionState.sizeof()];
             sessionState.buffer().getBytes(sessionState.offset(), array);
             return array;
+        }
+    }
+
+    public static final class MqttOffsetMetadataBuilder
+    {
+        private final MqttOffsetMetadataFW.Builder offsetMetadataRW = new MqttOffsetMetadataFW.Builder();
+
+        private MqttOffsetMetadataBuilder()
+        {
+            MutableDirectBuffer writeBuffer = new UnsafeBuffer(new byte[1024 * 8]);
+            offsetMetadataRW.wrap(writeBuffer, 0, writeBuffer.capacity());
+        }
+
+        public MqttOffsetMetadataBuilder metadata(
+            int packetId)
+        {
+            offsetMetadataRW.metadataItem(f -> f.packetId(packetId));
+            return this;
+        }
+
+        public String build()
+        {
+            final MqttOffsetMetadataFW offsetMetadata = offsetMetadataRW.build();
+            final byte[] array = new byte[offsetMetadata.sizeof()];
+            offsetMetadata.buffer().getBytes(offsetMetadata.offset(), array);
+            return BitUtil.toHex(array);
         }
     }
 
@@ -1020,10 +964,17 @@ public final class MqttFunctions
             return this;
         }
 
-        public MqttWillMessageBuilder payloadSize(
-            int payloadSize)
+        public MqttWillMessageBuilder payload(
+            String payload)
         {
-            willMessageRW.payloadSize(payloadSize);
+            willMessageRW.payload(c -> c.bytes(b -> b.set(payload.getBytes(UTF_8))));
+            return this;
+        }
+
+        public MqttWillMessageBuilder payloadBytes(
+            byte[] payload)
+        {
+            willMessageRW.payload(c -> c.bytes(b -> b.set(payload)));
             return this;
         }
 
@@ -1274,7 +1225,6 @@ public final class MqttFunctions
             private String16FW clientId;
             private String16FW topic;
             private Integer flags;
-            private Integer qos;
 
             private MqttPublishBeginExMatcherBuilder()
             {
@@ -1302,12 +1252,6 @@ public final class MqttFunctions
                 return this;
             }
 
-            public MqttPublishBeginExMatcherBuilder qos(
-                int qos)
-            {
-                this.qos = qos;
-                return this;
-            }
 
             public MqttBeginExMatcherBuilder build()
             {
@@ -1320,8 +1264,7 @@ public final class MqttFunctions
                 final MqttPublishBeginExFW publishBeginEx = beginEx.publish();
                 return matchClientId(publishBeginEx) &&
                     matchTopic(publishBeginEx) &&
-                    matchFlags(publishBeginEx) &&
-                    matchQos(publishBeginEx);
+                    matchFlags(publishBeginEx);
             }
 
             private boolean matchClientId(
@@ -1329,6 +1272,7 @@ public final class MqttFunctions
             {
                 return clientId == null || clientId.equals(publishBeginEx.clientId());
             }
+
 
             private boolean matchTopic(
                 final MqttPublishBeginExFW publishBeginEx)
@@ -1340,12 +1284,6 @@ public final class MqttFunctions
                 final MqttPublishBeginExFW publishBeginEx)
             {
                 return flags == null || flags == publishBeginEx.flags();
-            }
-
-            private boolean matchQos(
-                final MqttPublishBeginExFW publishBeginEx)
-            {
-                return qos == null || qos == publishBeginEx.qos();
             }
         }
 
@@ -1460,17 +1398,14 @@ public final class MqttFunctions
         public final class MqttSessionBeginExMatcherBuilder
         {
             private String16FW clientId;
-            private List<Integer> packetIds;
             private Integer expiry;
             private Integer flags;
             private Integer capabilities;
-            private Integer subscribeQosMax;
-            private int publishQosMax;
+            private Integer qosMax;
             private Integer packetSizeMax;
 
             private MqttSessionBeginExMatcherBuilder()
             {
-                packetIds = new ArrayList<>();
             }
 
             public MqttSessionBeginExMatcherBuilder clientId(
@@ -1487,24 +1422,10 @@ public final class MqttFunctions
                 return this;
             }
 
-            public MqttSessionBeginExMatcherBuilder packetId(
-                int packetId)
+            public MqttSessionBeginExMatcherBuilder qosMax(
+                int qosMax)
             {
-                this.packetIds.add(packetId);
-                return this;
-            }
-
-            public MqttSessionBeginExMatcherBuilder subscribeQosMax(
-                int subscribeQosMax)
-            {
-                this.subscribeQosMax = subscribeQosMax;
-                return this;
-            }
-
-            public MqttSessionBeginExMatcherBuilder publishQosMax(
-                int publishQosMax)
-            {
-                this.publishQosMax = publishQosMax;
+                this.qosMax = qosMax;
                 return this;
             }
 
@@ -1544,9 +1465,8 @@ public final class MqttFunctions
                 final MqttSessionBeginExFW sessionBeginEx = beginEx.session();
                 return matchFlags(sessionBeginEx) &&
                     matchClientId(sessionBeginEx) &&
-                    matchPacketIds(sessionBeginEx) &&
                     matchExpiry(sessionBeginEx) &&
-                    matchSubscribeQosMax(sessionBeginEx) &&
+                    matchQosMax(sessionBeginEx) &&
                     matchPacketSizeMax(sessionBeginEx) &&
                     matchCapabilities(sessionBeginEx);
             }
@@ -1557,23 +1477,10 @@ public final class MqttFunctions
                 return clientId == null || clientId.equals(sessionBeginEx.clientId());
             }
 
-            private boolean matchPacketIds(
+            private boolean matchQosMax(
                 final MqttSessionBeginExFW sessionBeginEx)
             {
-                final PrimitiveIterator.OfInt ids = sessionBeginEx.packetIds();
-
-                boolean match = packetIds == null || packetIds.isEmpty();
-                while (!match && ids.hasNext())
-                {
-                    match = packetIds.contains(ids.nextInt());
-                }
-                return match;
-            }
-
-            private boolean matchSubscribeQosMax(
-                final MqttSessionBeginExFW sessionBeginEx)
-            {
-                return subscribeQosMax == null || subscribeQosMax == sessionBeginEx.subscribeQosMax();
+                return qosMax == null || qosMax == sessionBeginEx.qosMax();
             }
 
             private boolean matchPacketSizeMax(
@@ -1910,23 +1817,14 @@ public final class MqttFunctions
             private final DirectBuffer correlationRO = new UnsafeBuffer(0, 0);
             private Integer qos;
             private Integer flags;
-            private Integer packetId;
             private Integer expiryInterval = -1;
             private String16FW contentType;
             private MqttPayloadFormatFW format;
             private String16FW responseTopic;
             private Array32FW.Builder<MqttUserPropertyFW.Builder, MqttUserPropertyFW> userPropertiesRW;
-            private Integer deferred;
 
             private MqttPublishDataExMatcherBuilder()
             {
-            }
-
-            public MqttPublishDataExMatcherBuilder deferred(
-                int deferred)
-            {
-                this.deferred = deferred;
-                return this;
             }
 
             public MqttPublishDataExMatcherBuilder qos(
@@ -1942,13 +1840,6 @@ public final class MqttFunctions
                 this.flags = Arrays.stream(flags)
                     .mapToInt(flag -> 1 << MqttPublishFlags.valueOf(flag).ordinal())
                     .reduce(0, (a, b) -> a | b);
-                return this;
-            }
-
-            public MqttPublishDataExMatcherBuilder packetId(
-                int packetId)
-            {
-                this.packetId = packetId;
                 return this;
             }
 
@@ -2029,22 +1920,14 @@ public final class MqttFunctions
                 MqttDataExFW dataEx)
             {
                 final MqttPublishDataExFW publishDataEx = dataEx.publish();
-                return matchDeferred(publishDataEx) &&
-                    matchQos(publishDataEx) &&
+                return matchQos(publishDataEx) &&
                     matchFlags(publishDataEx) &&
-                    matchPacketId(publishDataEx) &&
                     matchExpiryInterval(publishDataEx) &&
                     matchContentType(publishDataEx) &&
                     matchFormat(publishDataEx) &&
                     matchResponseTopic(publishDataEx) &&
                     matchCorrelation(publishDataEx) &&
                     matchUserProperties(publishDataEx);
-            }
-
-            private boolean matchDeferred(
-                final MqttPublishDataExFW data)
-            {
-                return deferred == null || deferred == data.deferred();
             }
 
             private boolean matchQos(
@@ -2057,12 +1940,6 @@ public final class MqttFunctions
                 final MqttPublishDataExFW data)
             {
                 return flags == null || flags == data.flags();
-            }
-
-            private boolean matchPacketId(
-                final MqttPublishDataExFW data)
-            {
-                return packetId == null || packetId == data.packetId();
             }
 
             private boolean matchExpiryInterval(
@@ -2099,113 +1976,6 @@ public final class MqttFunctions
                 final MqttPublishDataExFW data)
             {
                 return userPropertiesRW == null || userPropertiesRW.build().equals(data.properties());
-            }
-        }
-    }
-
-    public static final class MqttFlushExMatcherBuilder
-    {
-        private final DirectBuffer bufferRO = new UnsafeBuffer();
-
-        private final MqttFlushExFW flushExRo = new MqttFlushExFW();
-
-        private Integer typeId;
-        private Integer kind;
-        private Predicate<MqttFlushExFW> caseMatcher;
-
-        public MqttSessionFlushExMatcherBuilder session()
-        {
-            final MqttSessionFlushExMatcherBuilder matcherBuilder = new MqttSessionFlushExMatcherBuilder();
-
-            this.kind = MqttExtensionKind.SESSION.value();
-            this.caseMatcher = matcherBuilder::match;
-            return matcherBuilder;
-        }
-
-        public MqttFlushExMatcherBuilder typeId(
-            int typeId)
-        {
-            this.typeId = typeId;
-            return this;
-        }
-
-        public BytesMatcher build()
-        {
-            return typeId != null || kind != null ? this::match : buf -> null;
-        }
-
-        private MqttFlushExFW match(
-            ByteBuffer byteBuf) throws Exception
-        {
-            if (!byteBuf.hasRemaining())
-            {
-                return null;
-            }
-
-            bufferRO.wrap(byteBuf);
-            final MqttFlushExFW flushEx = flushExRo.tryWrap(bufferRO, byteBuf.position(), byteBuf.capacity());
-
-            if (flushEx != null &&
-                matchTypeId(flushEx) &&
-                matchKind(flushEx) &&
-                matchCase(flushEx))
-            {
-                byteBuf.position(byteBuf.position() + flushEx.sizeof());
-                return flushEx;
-            }
-
-            throw new Exception(flushEx.toString());
-        }
-
-        private boolean matchTypeId(
-            final MqttFlushExFW flushEx)
-        {
-            return typeId == null || typeId == flushEx.typeId();
-        }
-
-        private boolean matchKind(
-            final MqttFlushExFW flushEx)
-        {
-            return kind == null || kind == flushEx.kind();
-        }
-
-        private boolean matchCase(
-            final MqttFlushExFW flushEx) throws Exception
-        {
-            return caseMatcher == null || caseMatcher.test(flushEx);
-        }
-
-        public final class MqttSessionFlushExMatcherBuilder
-        {
-            private Integer packetId;
-
-            private MqttSessionFlushExMatcherBuilder()
-            {
-            }
-
-            public MqttSessionFlushExMatcherBuilder packetId(
-                int packetId)
-            {
-                this.packetId = packetId;
-                return this;
-            }
-
-            public MqttFlushExMatcherBuilder build()
-            {
-                return MqttFlushExMatcherBuilder.this;
-            }
-
-            private boolean match(
-                MqttFlushExFW flushEx)
-            {
-                final MqttSessionFlushExFW sessionFlushEx = flushEx.session();
-                return matchPacketId(sessionFlushEx);
-            }
-
-            private boolean matchPacketId(
-                final MqttSessionFlushExFW flush)
-            {
-                return packetId == null || packetId == flush.packetId();
             }
         }
     }

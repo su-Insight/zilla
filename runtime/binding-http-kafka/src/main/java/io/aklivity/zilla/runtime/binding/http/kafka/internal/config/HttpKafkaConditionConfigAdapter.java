@@ -68,9 +68,6 @@ public final class HttpKafkaConditionConfigAdapter implements ConditionConfigAda
                 ? object.getString(PATH_NAME)
                 : null;
 
-        return HttpKafkaConditionConfig.builder()
-            .method(method)
-            .path(path)
-            .build();
+        return new HttpKafkaConditionConfig(method, path);
     }
 }

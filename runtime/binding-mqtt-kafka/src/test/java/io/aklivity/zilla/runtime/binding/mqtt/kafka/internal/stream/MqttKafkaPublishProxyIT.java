@@ -15,11 +15,8 @@
 package io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.stream;
 
 import static io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.MqttKafkaConfigurationTest.BOOTSTRAP_AVAILABLE_NAME;
-import static io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.MqttKafkaConfigurationTest.INSTANCE_ID_NAME;
-import static io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.MqttKafkaConfigurationTest.SESSION_ID_NAME;
 import static io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.MqttKafkaConfigurationTest.WILL_AVAILABLE_NAME;
 import static io.aklivity.zilla.runtime.engine.EngineConfiguration.ENGINE_BUFFER_SLOT_CAPACITY;
-import static io.aklivity.zilla.runtime.engine.test.EngineRule.ENGINE_BUFFER_SLOT_CAPACITY_NAME;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
@@ -47,10 +44,6 @@ public class MqttKafkaPublishProxyIT
         .directory("target/zilla-itests")
         .countersBufferCapacity(8192)
         .configure(ENGINE_BUFFER_SLOT_CAPACITY, 8192)
-        .configure(SESSION_ID_NAME,
-            "io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.stream.MqttKafkaSessionProxyIT::supplySessionId")
-        .configure(INSTANCE_ID_NAME,
-            "io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.stream.MqttKafkaSessionProxyIT::supplyInstanceId")
         .configurationRoot("io/aklivity/zilla/specs/binding/mqtt/kafka/config")
         .external("kafka0")
         .clean();
@@ -95,6 +88,17 @@ public class MqttKafkaPublishProxyIT
     @Configuration("proxy.yaml")
     @Configure(name = WILL_AVAILABLE_NAME, value = "false")
     @Specification({
+        "${mqtt}/publish.server.sent.flush/client",
+        "${kafka}/publish.server.sent.flush/server"})
+    public void shouldReceiveServerSentFlush() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("proxy.yaml")
+    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
+    @Specification({
         "${mqtt}/publish.server.sent.reset/client",
         "${kafka}/publish.server.sent.reset/server"})
     public void shouldReceiveServerSentReset() throws Exception
@@ -120,6 +124,17 @@ public class MqttKafkaPublishProxyIT
         "${mqtt}/publish.retained.server.sent.abort/client",
         "${kafka}/publish.retained.server.sent.abort/server"})
     public void shouldPublishRetainedThenReceiveServerSentAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("proxy.yaml")
+    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
+    @Specification({
+        "${mqtt}/publish.retained.server.sent.flush/client",
+        "${kafka}/publish.retained.server.sent.flush/server"})
+    public void shouldPublishRetainedThenReceiveServerSentFlush() throws Exception
     {
         k3po.finish();
     }
@@ -286,128 +301,6 @@ public class MqttKafkaPublishProxyIT
         "${mqtt}/publish.qos2/client",
         "${kafka}/publish.qos2/server"})
     public void shouldSendMessageQos2() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.retained/client",
-        "${kafka}/publish.qos2.retained/server"})
-    public void shouldSendMessageQos2Retained() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.recovery/client",
-        "${kafka}/publish.qos2.recovery/server"})
-    public void shouldSendMessageQos2DuringRecovery() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.abort/client",
-        "${kafka}/publish.qos2.meta.abort/server"})
-    public void shouldSessionReceiveQos2MetaSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.abort/client",
-        "${kafka}/publish.qos2.offset.fetch.abort/server"})
-    public void shouldSessionReceiveQos2OffsetFetchSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.abort/client",
-        "${kafka}/publish.qos2.init.producer.abort/server"})
-    public void shouldSessionReceiveQos2InitProducerSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.offset.commit.abort.phase1/client",
-        "${kafka}/publish.qos2.offset.commit.abort.phase1/server"})
-    public void shouldPublishReceiveQos2OffsetCommitSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.qos2.offset.commit.abort.phase2/client",
-        "${kafka}/publish.qos2.offset.commit.abort.phase2/server"})
-    public void shouldSessionReceiveQos2OffsetCommitSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.mixture.qos/client",
-        "${kafka}/publish.mixture.qos/server"})
-    public void shouldSendMessageMixtureQos() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Configure(name = ENGINE_BUFFER_SLOT_CAPACITY_NAME, value = "8192")
-    @Specification({
-        "${mqtt}/publish.10k/client",
-        "${kafka}/publish.10k/server"})
-    public void shouldSendMessage10k() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.retained.10k/client",
-        "${kafka}/publish.retained.10k/server"})
-    public void shouldSendRetainedMessageM10k() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Configuration("proxy.yaml")
-    @Configure(name = WILL_AVAILABLE_NAME, value = "false")
-    @Specification({
-        "${mqtt}/publish.reject.large.message/client",
-        "${kafka}/publish.reject.large.message/server"})
-    public void shouldRejectLargeMessage() throws Exception
     {
         k3po.finish();
     }

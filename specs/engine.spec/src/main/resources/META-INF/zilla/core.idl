@@ -100,15 +100,4 @@ scope core
             octets extension;
         }
     }
-
-    scope event
-    {
-        struct Event
-        {
-            int64 timestamp;
-            int64 traceId;
-            int64 namespacedId;
-            octets extension;
-        }
-    }
 }

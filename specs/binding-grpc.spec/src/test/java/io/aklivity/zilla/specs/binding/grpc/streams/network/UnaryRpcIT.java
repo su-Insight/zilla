@@ -135,14 +135,4 @@ public class UnaryRpcIT
     {
         k3po.finish();
     }
-
-    @Test
-    @Specification({
-        "${net}/message.exchange.100k/client",
-        "${net}/message.exchange.100k/server"
-    })
-    public void shouldExchange100kMessage() throws Exception
-    {
-        k3po.finish();
-    }
 }

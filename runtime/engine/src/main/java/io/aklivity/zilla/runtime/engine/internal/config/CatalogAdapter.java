@@ -22,7 +22,6 @@ import jakarta.json.JsonObjectBuilder;
 import io.aklivity.zilla.runtime.engine.config.CatalogConfig;
 import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
 import io.aklivity.zilla.runtime.engine.config.OptionsConfig;
-import io.aklivity.zilla.runtime.engine.config.OptionsConfigAdapter;
 import io.aklivity.zilla.runtime.engine.config.OptionsConfigAdapterSpi;
 
 public class CatalogAdapter
@@ -30,20 +29,12 @@ public class CatalogAdapter
     private static final String TYPE_NAME = "type";
     private static final String OPTIONS_NAME = "options";
 
-    private final OptionsConfigAdapter options;
-
-    private String namespace;
+    private final OptionsAdapter options;
 
     public CatalogAdapter(
         ConfigAdapterContext context)
     {
-        this.options = new OptionsConfigAdapter(OptionsConfigAdapterSpi.Kind.CATALOG, context);
-    }
-
-    public void adaptNamespace(
-        String namespace)
-    {
-        this.namespace = namespace;
+        this.options = new OptionsAdapter(OptionsConfigAdapterSpi.Kind.CATALOG, context);
     }
 
     public JsonObject adaptToJson(
@@ -75,6 +66,6 @@ public class CatalogAdapter
                 options.adaptFromJson(object.getJsonObject(OPTIONS_NAME)) :
                 null;
 
-        return new CatalogConfig(namespace, name, type, opts);
+        return new CatalogConfig(name, type, opts);
     }
 }

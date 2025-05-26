@@ -15,17 +15,16 @@
  */
 package io.aklivity.zilla.runtime.binding.kafka.internal.config;
 
-import static io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaTopicType.DEFAULT_TOPIC_TYPE;
 import static io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaOffsetType.HISTORICAL;
 import static java.util.stream.Collectors.toList;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.ToLongFunction;
+import java.util.stream.Collectors;
 
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaOptionsConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaSaslConfig;
-import io.aklivity.zilla.runtime.binding.kafka.config.KafkaServerConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaTopicConfig;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaDeltaType;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaOffsetType;
@@ -41,7 +40,7 @@ public final class KafkaBindingConfig
     public final KindConfig kind;
     public final List<KafkaRouteConfig> routes;
     public final ToLongFunction<String> resolveId;
-    public final List<KafkaTopicType> topicTypes;
+    public final Map<String, KafkaTopicType> topics;
 
     public KafkaBindingConfig(
         BindingConfig binding,
@@ -53,8 +52,13 @@ public final class KafkaBindingConfig
         this.options = KafkaOptionsConfig.class.cast(binding.options);
         this.routes = binding.routes.stream().map(KafkaRouteConfig::new).collect(toList());
         this.resolveId = binding.resolveId;
-        this.topicTypes = options != null && options.topics != null
-            ? options.topics.stream().map(t -> new KafkaTopicType(context, t)).collect(toList()) : Collections.emptyList();
+        this.topics = options != null &&
+                options.topics != null
+                    ? options.topics.stream()
+                    .collect(Collectors.toMap(t -> t.name, t -> new KafkaTopicType(
+                    t.key != null ? context.createValidator(t.key, resolveId) : null,
+                    t.value != null ? context.createValidator(t.value, resolveId) : null
+                    ))) : null;
     }
 
     public KafkaRouteConfig resolve(
@@ -93,11 +97,6 @@ public final class KafkaBindingConfig
         return options != null ? options.sasl : null;
     }
 
-    public List<KafkaServerConfig> servers()
-    {
-        return options != null ? options.servers : null;
-    }
-
     public KafkaDeltaType supplyDeltaType(
         String topic,
         KafkaDeltaType deltaType)
@@ -111,20 +110,5 @@ public final class KafkaBindingConfig
     {
         KafkaTopicConfig config = topic(topic);
         return config != null && config.defaultOffset != null ? config.defaultOffset : HISTORICAL;
-    }
-
-    public KafkaTopicType resolveTopicType(
-        String topic)
-    {
-        KafkaTopicType matchedType = DEFAULT_TOPIC_TYPE;
-        for (KafkaTopicType topicType : topicTypes)
-        {
-            if (topicType.matches(topic))
-            {
-                matchedType = topicType;
-                break;
-            }
-        }
-        return matchedType;
     }
 }

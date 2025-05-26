@@ -18,7 +18,6 @@ import java.net.URL;
 
 import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.binding.Binding;
-import io.aklivity.zilla.runtime.engine.config.KindConfig;
 
 public final class GrpcBinding implements Binding
 {
@@ -42,20 +41,6 @@ public final class GrpcBinding implements Binding
     public URL type()
     {
         return getClass().getResource("schema/grpc.schema.patch.json");
-    }
-
-    @Override
-    public String originType(
-        KindConfig kind)
-    {
-        return kind == KindConfig.CLIENT ? NAME : null;
-    }
-
-    @Override
-    public String routedType(
-        KindConfig kind)
-    {
-        return kind == KindConfig.SERVER ? NAME : null;
     }
 
     @Override

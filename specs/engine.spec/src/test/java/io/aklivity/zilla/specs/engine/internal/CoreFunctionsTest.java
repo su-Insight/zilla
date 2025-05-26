@@ -32,13 +32,6 @@ import io.aklivity.zilla.specs.engine.internal.types.Varuint32nFW;
 public class CoreFunctionsTest
 {
     @Test
-    public void  shouldGenerateRandomString()
-    {
-        String randomString = CoreFunctions.randomString(10);
-        assertEquals(10, randomString.length());
-    }
-
-    @Test
     public void shouldEncodeString()
     {
         byte[] array = CoreFunctions.string("value");

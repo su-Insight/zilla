@@ -25,7 +25,6 @@ import jakarta.json.bind.adapter.JsonbAdapter;
 
 import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
 import io.aklivity.zilla.runtime.engine.config.ExporterConfig;
-import io.aklivity.zilla.runtime.engine.config.OptionsConfigAdapter;
 import io.aklivity.zilla.runtime.engine.config.OptionsConfigAdapterSpi;
 
 public class ExporterAdapter implements JsonbAdapter<ExporterConfig[], JsonObject>
@@ -33,20 +32,12 @@ public class ExporterAdapter implements JsonbAdapter<ExporterConfig[], JsonObjec
     private static final String TYPE_NAME = "type";
     private static final String OPTIONS_NAME = "options";
 
-    private final OptionsConfigAdapter options;
-
-    private String namespace;
+    private final OptionsAdapter options;
 
     public ExporterAdapter(
         ConfigAdapterContext context)
     {
-        this.options = new OptionsConfigAdapter(OptionsConfigAdapterSpi.Kind.EXPORTER, context);
-    }
-
-    public void adaptNamespace(
-        String namespace)
-    {
-        this.namespace = namespace;
+        this.options = new OptionsAdapter(OptionsConfigAdapterSpi.Kind.EXPORTER, context);
     }
 
     @Override
@@ -57,15 +48,12 @@ public class ExporterAdapter implements JsonbAdapter<ExporterConfig[], JsonObjec
         for (ExporterConfig exporter: exporters)
         {
             options.adaptType(exporter.type);
-
             JsonObjectBuilder item = Json.createObjectBuilder();
             item.add(TYPE_NAME, exporter.type);
             if (exporter.options != null)
             {
                 item.add(OPTIONS_NAME, options.adaptToJson(exporter.options));
             }
-
-            assert namespace.equals(exporter.namespace);
             object.add(exporter.name, item);
         }
         return object.build();
@@ -84,7 +72,6 @@ public class ExporterAdapter implements JsonbAdapter<ExporterConfig[], JsonObjec
             options.adaptType(type);
 
             exporters.add(ExporterConfig.builder()
-                .namespace(namespace)
                 .name(name)
                 .type(type)
                 .options(options.adaptFromJson(item.getJsonObject(OPTIONS_NAME)))

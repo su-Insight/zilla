@@ -21,7 +21,7 @@ import io.aklivity.zilla.runtime.engine.vault.VaultFactorySpi;
 public final class TestVaultFactorySpi implements VaultFactorySpi
 {
     @Override
-    public String type()
+    public String name()
     {
         return TestVault.NAME;
     }

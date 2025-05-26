@@ -132,14 +132,6 @@ public class SchemaTest
     }
 
     @Test
-    public void shouldValidateServerKeysNotFound()
-    {
-        JsonObject config = schema.validate("server.keys.not.found.yaml");
-
-        assertThat(config, not(nullValue()));
-    }
-
-    @Test
     public void shouldValidateServerMutual()
     {
         JsonObject config = schema.validate("server.mutual.yaml");
@@ -176,22 +168,6 @@ public class SchemaTest
     public void shouldValidateServerSni()
     {
         JsonObject config = schema.validate("server.sni.yaml");
-
-        assertThat(config, not(nullValue()));
-    }
-
-    @Test
-    public void shouldValidateServerPorts()
-    {
-        JsonObject config = schema.validate("server.ports.yaml");
-
-        assertThat(config, not(nullValue()));
-    }
-
-    @Test
-    public void shouldValidateClientPorts()
-    {
-        JsonObject config = schema.validate("client.ports.yaml");
 
         assertThat(config, not(nullValue()));
     }

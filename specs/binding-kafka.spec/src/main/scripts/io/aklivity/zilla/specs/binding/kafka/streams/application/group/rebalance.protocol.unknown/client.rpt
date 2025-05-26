@@ -35,8 +35,6 @@ read zilla:begin.ext ${kafka:beginEx()
                                    .groupId("test")
                                    .protocol("unknown")
                                    .instanceId("zilla")
-                                   .host("broker1.example.com")
-                                   .port(9092)
                                    .timeout(30000)
                                    .build()
                                .build()}

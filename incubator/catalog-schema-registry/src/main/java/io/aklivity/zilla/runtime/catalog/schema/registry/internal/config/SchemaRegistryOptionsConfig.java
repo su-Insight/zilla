@@ -14,7 +14,6 @@
  */
 package io.aklivity.zilla.runtime.catalog.schema.registry.internal.config;
 
-import java.time.Duration;
 import java.util.function.Function;
 
 import io.aklivity.zilla.runtime.engine.config.OptionsConfig;
@@ -23,7 +22,6 @@ public class SchemaRegistryOptionsConfig extends OptionsConfig
 {
     public final String url;
     public final String context;
-    public final Duration maxAge;
 
     public static SchemaRegistryOptionsConfigBuilder<SchemaRegistryOptionsConfig> builder()
     {
@@ -38,11 +36,9 @@ public class SchemaRegistryOptionsConfig extends OptionsConfig
 
     public SchemaRegistryOptionsConfig(
         String url,
-        String context,
-        Duration maxAge)
+        String context)
     {
         this.url = url;
         this.context = context;
-        this.maxAge = maxAge;
     }
 }

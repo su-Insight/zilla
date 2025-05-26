@@ -109,15 +109,11 @@
                                                         "type": "array",
                                                         "items":
                                                         {
-                                                            "properties":
+                                                            "topic":
                                                             {
-                                                                "topic":
-                                                                {
-                                                                    "title": "Topic",
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "additionalProperties": false
+                                                                "title": "Topic",
+                                                                "type": "string"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -127,19 +123,15 @@
                                                 {
                                                     "publish":
                                                     {
-                                                        "title": "Publish",
+                                                        "title": "Subscribe",
                                                         "type": "array",
                                                         "items":
                                                         {
-                                                            "properties":
+                                                            "topic":
                                                             {
-                                                                "topic":
-                                                                {
-                                                                    "title": "Topic",
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "additionalProperties": false
+                                                                "title": "Topic",
+                                                                "type": "string"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -149,15 +141,18 @@
                                 },
                                 "with":
                                 {
-                                    "properties":
+                                    "items":
                                     {
-                                        "messages":
+                                        "properties":
                                         {
-                                            "title": "Messages Topic",
-                                            "type": "string"
-                                        }
-                                    },
-                                    "additionalProperties": false
+                                            "messages":
+                                            {
+                                                "title": "Messages Topic",
+                                                "type": "string"
+                                            }
+                                        },
+                                        "additionalProperties": false
+                                    }
                                 }
                             },
                             "required":

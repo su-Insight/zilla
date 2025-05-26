@@ -23,7 +23,6 @@ write zilla:begin.ext ${mqtt:beginEx()
                            .session()
                               .flags("WILL")
                               .expiry(1)
-                              .capabilities("REDIRECT")
                               .clientId("client-1")
                               .build()
                            .build()}
@@ -41,9 +40,8 @@ write ${mqtt:will()
                .topic("obituaries")
                .delay(1)
                .format("TEXT")
-               .payloadSize(30)
+               .payload("client-1 disconnected abruptly")
                .build()}
-"client-1 disconnected abruptly"
 write flush
 
 

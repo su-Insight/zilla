@@ -31,7 +31,6 @@
                     {
                         "enum": [ "server", "client"]
                     },
-                    "vault": false,
                     "options":
                     {
                         "properties":

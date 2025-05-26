@@ -124,7 +124,7 @@ scope mqtt
         string16 willId = null;
         MqttBinary correlation;
         MqttUserProperty[] properties;
-        uint16 payloadSize;
+        MqttBinary payload;
     }
 
     scope stream
@@ -148,21 +148,17 @@ scope mqtt
             RETAIN (0),
             WILDCARD (1),
             SUBSCRIPTION_IDS (2),
-            SHARED_SUBSCRIPTIONS (3),
-            REDIRECT(4)
+            SHARED_SUBSCRIPTIONS (3)
         }
 
         struct MqttSessionBeginEx
         {
             uint8 flags = 0;
             int32 expiry = 0;
-            uint16 subscribeQosMax = 0;
-            uint16 publishQosMax = 0;
+            uint16 qosMax = 0;
             uint32 packetSizeMax = 0;
             uint8 capabilities = 0;
             string16 clientId;
-            int8 length;
-            int16[length] packetIds = null;
         }
 
         struct MqttSubscribeBeginEx
@@ -177,7 +173,6 @@ scope mqtt
             string16 clientId;
             string16 topic;
             uint8 flags = 0;
-            uint8 qos = 0;
         }
 
         union MqttDataEx switch (uint8) extends core::stream::Extension
@@ -208,7 +203,6 @@ scope mqtt
             int32 deferred = 0;             // INIT only (TODO: move to DATA frame)
             uint8 qos = 0;
             uint8 flags = 0;
-            uint16 packetId = 0;
             int32 expiryInterval = -1;
             string16 contentType = null;
             MqttPayloadFormat format = NONE;
@@ -225,7 +219,6 @@ scope mqtt
 
         struct MqttSessionDataEx
         {
-            int32 deferred = 0;
             MqttSessionDataKind kind;
         }
 
@@ -233,18 +226,11 @@ scope mqtt
         {
             string16 serverRef = null;
             uint8 reasonCode = 0;
-            string16 reason = null;
         }
 
         union MqttFlushEx switch (uint8) extends core::stream::Extension
         {
             case 1: mqtt::stream::MqttSubscribeFlushEx subscribe;
-            case 2: mqtt::stream::MqttSessionFlushEx session;
-        }
-
-        struct MqttSessionFlushEx
-        {
-            uint16 packetId = 0;
         }
 
         struct MqttSubscribeFlushEx
@@ -259,6 +245,17 @@ scope mqtt
         {
             COMPLETE(0),
             INCOMPLETE(1)
+        }
+
+        struct MqttOffsetState
+        {
+            uint16 packetId;
+        }
+
+        struct MqttOffsetMetadata
+        {
+            uint8 version = 1;
+            MqttOffsetState[] metadata;
         }
     }
 }

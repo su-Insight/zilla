@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import io.aklivity.zilla.runtime.engine.config.ConfigBuilder;
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 
 public class HttpRequestConfigBuilder<T> extends ConfigBuilder<T, HttpRequestConfigBuilder<T>>
 {
@@ -32,8 +32,7 @@ public class HttpRequestConfigBuilder<T> extends ConfigBuilder<T, HttpRequestCon
     private List<HttpParamConfig> headers;
     private List<HttpParamConfig> pathParams;
     private List<HttpParamConfig> queryParams;
-    private ModelConfig content;
-    private List<HttpResponseConfig> responses;
+    private ValidatorConfig content;
 
     HttpRequestConfigBuilder(
         Function<HttpRequestConfig, T> mapper)
@@ -121,12 +120,6 @@ public class HttpRequestConfigBuilder<T> extends ConfigBuilder<T, HttpRequestCon
         return this;
     }
 
-    public HttpParamConfigBuilder<HttpRequestConfigBuilder<T>> pathParam()
-    {
-        return new HttpParamConfigBuilder<>(this::pathParam);
-    }
-
-
     public HttpParamConfigBuilder<HttpRequestConfigBuilder<T>> queryParam()
     {
         return new HttpParamConfigBuilder<>(this::queryParam);
@@ -150,46 +143,27 @@ public class HttpRequestConfigBuilder<T> extends ConfigBuilder<T, HttpRequestCon
         return this;
     }
 
+    public HttpParamConfigBuilder<HttpRequestConfigBuilder<T>> pathParam()
+    {
+        return new HttpParamConfigBuilder<>(this::pathParam);
+    }
+
     public HttpRequestConfigBuilder<T> content(
-        ModelConfig content)
+        ValidatorConfig content)
     {
         this.content = content;
         return this;
     }
 
     public <C extends ConfigBuilder<HttpRequestConfigBuilder<T>, C>> C content(
-        Function<Function<ModelConfig, HttpRequestConfigBuilder<T>>, C> content)
+        Function<Function<ValidatorConfig, HttpRequestConfigBuilder<T>>, C> content)
     {
         return content.apply(this::content);
-    }
-
-    public HttpRequestConfigBuilder<T> responses(
-        List<HttpResponseConfig> responses)
-    {
-        this.responses = responses;
-        return this;
-    }
-
-    public HttpRequestConfigBuilder<T> response(
-        HttpResponseConfig response)
-    {
-        if (this.responses == null)
-        {
-            this.responses = new LinkedList<>();
-        }
-        this.responses.add(response);
-        return this;
-    }
-
-    public HttpResponseConfigBuilder<HttpRequestConfigBuilder<T>> response()
-    {
-        return new HttpResponseConfigBuilder<>(this::response);
     }
 
     @Override
     public T build()
     {
-        return mapper.apply(new HttpRequestConfig(path, method, contentTypes, headers, pathParams, queryParams, content,
-            responses));
+        return mapper.apply(new HttpRequestConfig(path, method, contentTypes, headers, pathParams, queryParams, content));
     }
 }

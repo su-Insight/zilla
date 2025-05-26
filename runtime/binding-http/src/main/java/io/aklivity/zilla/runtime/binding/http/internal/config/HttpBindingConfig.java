@@ -26,11 +26,14 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.agrona.DirectBuffer;
+import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.Object2ObjectHashMap;
 
 import io.aklivity.zilla.runtime.binding.http.config.HttpAccessControlConfig;
@@ -39,15 +42,15 @@ import io.aklivity.zilla.runtime.binding.http.config.HttpOptionsConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpParamConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpPatternConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpRequestConfig;
-import io.aklivity.zilla.runtime.binding.http.config.HttpResponseConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpVersion;
 import io.aklivity.zilla.runtime.binding.http.internal.types.HttpHeaderFW;
+import io.aklivity.zilla.runtime.binding.http.internal.types.String16FW;
 import io.aklivity.zilla.runtime.binding.http.internal.types.String8FW;
 import io.aklivity.zilla.runtime.binding.http.internal.types.stream.HttpBeginExFW;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.KindConfig;
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
-import io.aklivity.zilla.runtime.engine.model.ValidatorHandler;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
+import io.aklivity.zilla.runtime.engine.validator.Validator;
 
 public final class HttpBindingConfig
 {
@@ -58,7 +61,6 @@ public final class HttpBindingConfig
     private static final String8FW HEADER_CONTENT_TYPE = new String8FW("content-type");
     private static final String8FW HEADER_METHOD = new String8FW(":method");
     private static final String8FW HEADER_PATH = new String8FW(":path");
-    private static final String8FW HEADER_STATUS = new String8FW(":status");
     private static final HttpQueryStringComparator QUERY_STRING_COMPARATOR = new HttpQueryStringComparator();
 
     public final long id;
@@ -71,8 +73,14 @@ public final class HttpBindingConfig
     public final List<HttpRequestType> requests;
 
     public HttpBindingConfig(
+        BindingConfig binding)
+    {
+        this(binding, null);
+    }
+
+    public HttpBindingConfig(
         BindingConfig binding,
-        Function<ModelConfig, ValidatorHandler> supplyValidator)
+        BiFunction<ValidatorConfig, ToLongFunction<String>, Validator> createValidator)
     {
         this.id = binding.id;
         this.name = binding.name;
@@ -82,7 +90,7 @@ public final class HttpBindingConfig
         this.resolveId = binding.resolveId;
         this.credentials = options != null && options.authorization != null ?
                 asAccessor(options.authorization.credentials) : DEFAULT_CREDENTIALS;
-        this.requests = supplyValidator == null ? null : createRequestTypes(supplyValidator);
+        this.requests = createValidator == null ? null : createRequestTypes(createValidator);
     }
 
     public HttpRouteConfig resolve(
@@ -187,63 +195,38 @@ public final class HttpBindingConfig
     }
 
     private List<HttpRequestType> createRequestTypes(
-        Function<ModelConfig, ValidatorHandler> supplyValidator)
+        BiFunction<ValidatorConfig, ToLongFunction<String>, Validator> createValidator)
     {
         List<HttpRequestType> requestTypes = new LinkedList<>();
         if (this.options != null && this.options.requests != null)
         {
             for (HttpRequestConfig request : this.options.requests)
             {
-                Map<String8FW, ValidatorHandler> headers = new HashMap<>();
+                Map<String8FW, Validator> headers = new HashMap<>();
                 if (request.headers != null)
                 {
                     for (HttpParamConfig header : request.headers)
                     {
-                        headers.put(new String8FW(header.name), supplyValidator.apply(header.model));
+                        headers.put(new String8FW(header.name), createValidator.apply(header.validator, this.resolveId));
                     }
                 }
-
-                Map<String, ValidatorHandler> pathParams = new Object2ObjectHashMap<>();
+                Map<String, Validator> pathParams = new Object2ObjectHashMap<>();
                 if (request.pathParams != null)
                 {
                     for (HttpParamConfig pathParam : request.pathParams)
                     {
-                        pathParams.put(pathParam.name, supplyValidator.apply(pathParam.model));
+                        pathParams.put(pathParam.name, createValidator.apply(pathParam.validator, this.resolveId));
                     }
                 }
-
-                Map<String, ValidatorHandler> queryParams = new TreeMap<>(QUERY_STRING_COMPARATOR);
+                Map<String, Validator> queryParams = new TreeMap<>(QUERY_STRING_COMPARATOR);
                 if (request.queryParams != null)
                 {
                     for (HttpParamConfig queryParam : request.queryParams)
                     {
-                        queryParams.put(queryParam.name, supplyValidator.apply(queryParam.model));
+                        queryParams.put(queryParam.name, createValidator.apply(queryParam.validator, this.resolveId));
                     }
                 }
-
-                List<HttpRequestType.Response> responses = new LinkedList<>();
-                if (request.responses != null)
-                {
-                    for (HttpResponseConfig response0 : request.responses)
-                    {
-                        Map<String8FW, ValidatorHandler> responseHeaderValidators = new HashMap<>();
-                        if (response0.headers != null)
-                        {
-                            for (HttpParamConfig header : response0.headers)
-                            {
-                                String8FW name = new String8FW(header.name);
-                                ValidatorHandler validator = supplyValidator.apply(header.model);
-                                if (validator != null)
-                                {
-                                    responseHeaderValidators.put(name, validator);
-                                }
-                            }
-                        }
-                        HttpRequestType.Response response = new HttpRequestType.Response(response0.status, response0.contentType,
-                            responseHeaderValidators, response0.content);
-                        responses.add(response);
-                    }
-                }
+                Validator content = request.content == null ? null : createValidator.apply(request.content, this.resolveId);
                 HttpRequestType requestType = HttpRequestType.builder()
                     .path(request.path)
                     .method(request.method)
@@ -251,8 +234,7 @@ public final class HttpBindingConfig
                     .headers(headers)
                     .pathParams(pathParams)
                     .queryParams(queryParams)
-                    .content(request.content)
-                    .responses(responses)
+                    .content(content)
                     .build();
                 requestTypes.add(requestType);
             }
@@ -271,9 +253,9 @@ public final class HttpBindingConfig
             String contentType = resolveHeaderValue(beginEx, HEADER_CONTENT_TYPE);
             for (HttpRequestType requestType : requests)
             {
-                if (matchRequestMethod(requestType, method) &&
-                    matchRequestContentType(requestType, contentType) &&
-                    matchRequestPath(requestType, path))
+                if (matchMethod(requestType, method) &&
+                    matchContentType(requestType, contentType) &&
+                    matchPath(requestType, path))
                 {
                     result = requestType;
                     break;
@@ -283,60 +265,115 @@ public final class HttpBindingConfig
         return result;
     }
 
-    public HttpRequestType.Response resolveResponse(
-        HttpRequestType requestType,
-        HttpBeginExFW beginEx)
-    {
-        HttpRequestType.Response result = null;
-        if (requestType != null && requestType.responses != null)
-        {
-            String status = resolveHeaderValue(beginEx, HEADER_STATUS);
-            String contentType = resolveHeaderValue(beginEx, HEADER_CONTENT_TYPE);
-            for (HttpRequestType.Response response : requestType.responses)
-            {
-                if (matchResponseStatus(response, status) &&
-                    matchResponseContentType(response, contentType))
-                {
-                    result = response;
-                }
-            }
-        }
-        return result;
-    }
-
-    private boolean matchRequestMethod(
+    private boolean matchMethod(
         HttpRequestType requestType,
         String method)
     {
         return method == null || requestType.method == null || method.equals(requestType.method.name());
     }
 
-    private boolean matchRequestContentType(
+    private boolean matchContentType(
         HttpRequestType requestType,
         String contentType)
     {
         return contentType == null || requestType.contentType == null || requestType.contentType.contains(contentType);
     }
 
-    private boolean matchRequestPath(
+    private boolean matchPath(
         HttpRequestType requestType,
         String path)
     {
         return requestType.pathMatcher.reset(path).matches();
     }
 
-    private boolean matchResponseStatus(
-        HttpRequestType.Response response,
-        String status)
+    public boolean validateHeaders(
+        HttpRequestType requestType,
+        HttpBeginExFW beginEx)
     {
-        return status == null || response.status == null || response.status.contains(status);
+        String path = beginEx.headers().matchFirst(h -> h.name().equals(HEADER_PATH)).value().asString();
+        return requestType == null ||
+            validateHeaderValues(requestType, beginEx) &&
+            validatePathParams(requestType, path) &&
+            validateQueryParams(requestType, path);
     }
 
-    private boolean matchResponseContentType(
-        HttpRequestType.Response response,
-        String contentType)
+    private boolean validateHeaderValues(
+        HttpRequestType requestType,
+        HttpBeginExFW beginEx)
     {
-        return contentType == null || response.contentType == null || response.contentType.contains(contentType);
+        MutableBoolean valid = new MutableBoolean(true);
+        if (requestType != null && requestType.headers != null)
+        {
+            beginEx.headers().forEach(header ->
+            {
+                if (valid.value)
+                {
+                    Validator validator = requestType.headers.get(header.name());
+                    if (validator != null)
+                    {
+                        String16FW value = header.value();
+                        valid.value &= validator.read(value.value(), value.offset(), value.length());
+                    }
+                }
+            });
+        }
+        return valid.value;
+    }
+
+    private boolean validatePathParams(
+        HttpRequestType requestType,
+        String path)
+    {
+        Matcher matcher = requestType.pathMatcher.reset(path);
+        boolean matches = matcher.matches();
+        assert matches;
+
+        boolean valid = true;
+        for (String name : requestType.pathParams.keySet())
+        {
+            String value = matcher.group(name);
+            if (value != null)
+            {
+                String8FW value0 = new String8FW(value);
+                Validator validator = requestType.pathParams.get(name);
+                if (!validator.read(value0.value(), value0.offset(), value0.length()))
+                {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        return valid;
+    }
+
+    private boolean validateQueryParams(
+        HttpRequestType requestType,
+        String path)
+    {
+        Matcher matcher = requestType.queryMatcher.reset(path);
+        boolean valid = true;
+        while (valid && matcher.find())
+        {
+            String name = matcher.group(1);
+            Validator validator = requestType.queryParams.get(name);
+            if (validator != null)
+            {
+                String8FW value = new String8FW(matcher.group(2));
+                valid &= validator.read(value.value(), value.offset(), value.length());
+            }
+        }
+        return valid;
+    }
+
+    public boolean validateContent(
+        HttpRequestType requestType,
+        DirectBuffer buffer,
+        int index,
+        int length)
+    {
+        return requestType == null ||
+            requestType.content == null ||
+            requestType.content.read(buffer, index, length);
     }
 
     private static Function<Function<String, String>, String> orElseIfNull(

@@ -18,14 +18,14 @@ package io.aklivity.zilla.runtime.binding.mqtt.config;
 import java.util.function.Function;
 
 import io.aklivity.zilla.runtime.engine.config.ConfigBuilder;
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 
 public class MqttTopicConfigBuilder<T> extends ConfigBuilder<T, MqttTopicConfigBuilder<T>>
 {
     private final Function<MqttTopicConfig, T> mapper;
 
     private String name;
-    private ModelConfig content;
+    private ValidatorConfig content;
 
     MqttTopicConfigBuilder(
         Function<MqttTopicConfig, T> mapper)
@@ -48,14 +48,14 @@ public class MqttTopicConfigBuilder<T> extends ConfigBuilder<T, MqttTopicConfigB
     }
 
     public MqttTopicConfigBuilder<T> content(
-        ModelConfig content)
+        ValidatorConfig content)
     {
         this.content = content;
         return this;
     }
 
     public <C extends ConfigBuilder<MqttTopicConfigBuilder<T>, C>> C content(
-        Function<Function<ModelConfig, MqttTopicConfigBuilder<T>>, C> content)
+        Function<Function<ValidatorConfig, MqttTopicConfigBuilder<T>>, C> content)
     {
         return content.apply(this::content);
     }

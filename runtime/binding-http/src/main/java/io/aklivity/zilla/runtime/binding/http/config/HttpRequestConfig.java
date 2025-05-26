@@ -19,7 +19,7 @@ import static java.util.function.Function.identity;
 
 import java.util.List;
 
-import io.aklivity.zilla.runtime.engine.config.ModelConfig;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 
 public class HttpRequestConfig
 {
@@ -41,8 +41,7 @@ public class HttpRequestConfig
     public final List<HttpParamConfig> headers;
     public final List<HttpParamConfig> pathParams;
     public final List<HttpParamConfig> queryParams;
-    public final ModelConfig content;
-    public final List<HttpResponseConfig> responses;
+    public final ValidatorConfig content;
 
     public HttpRequestConfig(
         String path,
@@ -51,8 +50,7 @@ public class HttpRequestConfig
         List<HttpParamConfig> headers,
         List<HttpParamConfig> pathParams,
         List<HttpParamConfig> queryParams,
-        ModelConfig content,
-        List<HttpResponseConfig> responses)
+        ValidatorConfig content)
     {
         this.path = path;
         this.method = method;
@@ -61,7 +59,6 @@ public class HttpRequestConfig
         this.pathParams = pathParams;
         this.queryParams = queryParams;
         this.content = content;
-        this.responses = responses;
     }
 
     public static HttpRequestConfigBuilder<HttpRequestConfig> builder()
