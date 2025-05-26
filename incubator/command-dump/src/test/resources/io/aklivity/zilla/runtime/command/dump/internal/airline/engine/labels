@@ -32,3 +32,7 @@ north_echo_server
 east_http_filesystem_mapping
 east_filesystem_server
 north_mqtt_server
+north_mqtt_kafka_mapping
+amqp
+north_amqp_server
+north_fan_server
