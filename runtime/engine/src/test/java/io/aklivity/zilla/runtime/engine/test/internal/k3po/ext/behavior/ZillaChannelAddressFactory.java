@@ -23,6 +23,7 @@ import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.Zill
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_REPLY_TO;
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_STREAM_ID;
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_THROTTLE;
+import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_TIMESTAMPS;
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_TRANSMISSION;
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_UPDATE;
 import static io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.ZillaTypeSystem.OPTION_WINDOW;
@@ -33,9 +34,10 @@ import java.util.Collection;
 import java.util.Map;
 
 import org.jboss.netty.channel.ChannelException;
-import org.kaazing.k3po.driver.internal.netty.channel.ChannelAddress;
-import org.kaazing.k3po.driver.internal.netty.channel.ChannelAddressFactorySpi;
-import org.kaazing.k3po.lang.types.TypeInfo;
+
+import io.aklivity.k3po.runtime.driver.internal.netty.channel.ChannelAddress;
+import io.aklivity.k3po.runtime.driver.internal.netty.channel.ChannelAddressFactorySpi;
+import io.aklivity.k3po.runtime.lang.types.TypeInfo;
 
 public class ZillaChannelAddressFactory extends ChannelAddressFactorySpi
 {
@@ -75,7 +77,7 @@ public class ZillaChannelAddressFactory extends ChannelAddressFactorySpi
 
         Collection<TypeInfo<?>> allOptionTypes = asList(OPTION_EPHEMERAL, OPTION_REPLY_TO, OPTION_WINDOW, OPTION_BUDGET_ID,
                 OPTION_STREAM_ID, OPTION_PADDING, OPTION_UPDATE, OPTION_AUTHORIZATION, OPTION_THROTTLE,
-                OPTION_TRANSMISSION, OPTION_BYTE_ORDER);
+                OPTION_TRANSMISSION, OPTION_BYTE_ORDER, OPTION_TIMESTAMPS);
         for (TypeInfo<?> optionType : allOptionTypes)
         {
             if (options != null && options.containsKey(optionType.getName()))

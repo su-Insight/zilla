@@ -177,6 +177,12 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
+      <artifactId>catalog-filesystem</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
       <artifactId>catalog-inline</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
@@ -189,13 +195,13 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>command-dump</artifactId>
+      <artifactId>catalog-schema-registry</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>command-generate</artifactId>
+      <artifactId>command-dump</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
     </dependency>
@@ -214,6 +220,12 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>command-stop</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>command-version</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
     </dependency>
@@ -250,6 +262,12 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>exporter-stdout</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>filesystem-http</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
     </dependency>

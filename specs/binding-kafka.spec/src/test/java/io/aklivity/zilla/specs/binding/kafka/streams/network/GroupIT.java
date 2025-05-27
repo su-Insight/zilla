@@ -23,8 +23,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
+
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 
 public class GroupIT
 {
@@ -191,6 +192,15 @@ public class GroupIT
 
     @Test
     @Specification({
+        "${net}/invalid.describe.config.cluster.authorization.error/client",
+        "${net}/invalid.describe.config.cluster.authorization.error/server"})
+    public void shouldHandleInvalidDescribeConfigClusterAuthorizationError() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${net}/invalid.session.timeout/client",
         "${net}/invalid.session.timeout/server"})
     public void shouldHandleInvalidSessionTimeout() throws Exception
@@ -198,4 +208,12 @@ public class GroupIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${net}/initial.delay.config/client",
+        "${net}/initial.delay.config/server"})
+    public void shouldCreateConnectionForJoinGroup() throws Exception
+    {
+        k3po.finish();
+    }
 }

@@ -1,0 +1,6 @@
+RULE watcher service failed
+CLASS io.aklivity.zilla.runtime.engine.internal.watcher.EngineConfigWatcher
+METHOD newWatchService(java.nio.file.FileSystem)
+IF TRUE
+DO throw new java.io.IOException("[failed]")
+ENDRULE

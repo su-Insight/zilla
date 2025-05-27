@@ -15,193 +15,123 @@
 package io.aklivity.zilla.runtime.catalog.karapace.internal;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
-import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.mockito.Mockito.mock;
 
-import java.time.Duration;
-
-import org.agrona.DirectBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
 
-import io.aklivity.zilla.runtime.catalog.karapace.internal.config.KarapaceOptionsConfig;
-import io.aklivity.zilla.runtime.engine.EngineContext;
-import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
-import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
+import io.aklivity.zilla.runtime.engine.test.EngineRule;
+import io.aklivity.zilla.runtime.engine.test.annotation.Configuration;
 
 public class KarapaceIT
 {
     private final K3poRule k3po = new K3poRule()
-        .addScriptRoot("local", "io/aklivity/zilla/runtime/catalog/karapace/internal");
+        .addScriptRoot("net", "io/aklivity/zilla/specs/engine/streams/network")
+        .addScriptRoot("app", "io/aklivity/zilla/specs/engine/streams/application")
+        .addScriptRoot("remote", "io/aklivity/zilla/specs/catalog/schema/registry/streams");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
+    private final EngineRule engine = new EngineRule()
+        .directory("target/zilla-itests")
+        .countersBufferCapacity(4096)
+        .configurationRoot("io/aklivity/zilla/specs/catalog/karapace/config")
+        .external("app0")
+        .clean();
+
     @Rule
-    public final TestRule chain = outerRule(k3po).around(timeout);
-
-    private KarapaceOptionsConfig config;
-    private EngineContext context = mock(EngineContext.class);
-
-    @Before
-    public void setup()
-    {
-        config = KarapaceOptionsConfig.builder()
-            .url("http://localhost:8081")
-            .context("default")
-            .maxAge(Duration.ofSeconds(1))
-            .build();
-    }
+    public final TestRule chain = outerRule(engine).around(k3po).around(timeout);
 
     @Test
+    @Configuration("resolve/schema/id/zilla.yaml")
     @Specification({
-        "${local}/resolve.schema.via.schema.id" })
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.schema.id" })
     public void shouldResolveSchemaViaSchemaId() throws Exception
     {
-        String expected = "{\"fields\":[{\"name\":\"id\",\"type\":\"string\"}," +
-            "{\"name\":\"status\",\"type\":\"string\"}]," +
-            "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
-
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        String schema = catalog.resolve(9);
-
         k3po.finish();
-
-        assertThat(schema, not(nullValue()));
-        assertEquals(expected, schema);
     }
 
     @Test
+    @Configuration("resolve/subject/version/zilla.yaml")
     @Specification({
-        "${local}/resolve.schema.via.subject.version" })
-    public void shouldResolveSchemaViaSubjectVersion() throws Exception
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.subject.version" })
+    public void shouldResolveSchemaIdViaSubjectVersion() throws Exception
     {
-        String expected = "{\"fields\":[{\"name\":\"id\",\"type\":\"string\"}," +
-                "{\"name\":\"status\",\"type\":\"string\"}]," +
-                "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
-
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        int schemaId = catalog.resolve("items-snapshots-value", "latest");
-
-        String schema = catalog.resolve(schemaId);
-
         k3po.finish();
-
-        assertEquals(schemaId, 9);
-        assertThat(schema, not(nullValue()));
-        assertEquals(expected, schema);
     }
 
     @Test
+    @Configuration("resolve/schema/id/cache/zilla.yaml")
     @Specification({
-        "${local}/resolve.schema.via.schema.id" })
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.schema.id" })
     public void shouldResolveSchemaViaSchemaIdFromCache() throws Exception
     {
-        String expected = "{\"fields\":[{\"name\":\"id\",\"type\":\"string\"}," +
-                "{\"name\":\"status\",\"type\":\"string\"}]," +
-                "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
-
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        catalog.resolve(9);
-
         k3po.finish();
-
-        String schema = catalog.resolve(9);
-
-        assertThat(schema, not(nullValue()));
-        assertEquals(expected, schema);
     }
 
     @Test
+    @Configuration("resolve/subject/version/cache/zilla.yaml")
     @Specification({
-        "${local}/resolve.schema.via.subject.version" })
-    public void shouldResolveSchemaViaSubjectVersionFromCache() throws Exception
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.subject.version" })
+    public void shouldResolveSchemaIdViaSubjectVersionFromCache() throws Exception
     {
-        String expected = "{\"fields\":[{\"name\":\"id\",\"type\":\"string\"}," +
-                "{\"name\":\"status\",\"type\":\"string\"}]," +
-                "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
-
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        catalog.resolve(catalog.resolve("items-snapshots-value", "latest"));
-
         k3po.finish();
-
-        int schemaId = catalog.resolve("items-snapshots-value", "latest");
-
-        String schema = catalog.resolve(schemaId);
-
-        assertEquals(schemaId, 9);
-        assertThat(schema, not(nullValue()));
-        assertEquals(expected, schema);
     }
 
     @Test
-    public void shouldVerifyMaxPadding()
+    @Configuration("unretrievable/schema/id/zilla.yaml")
+    @Specification({
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.schema.id.failed"})
+    public void shouldLogFailedRegistryResponseForSchema() throws Exception
     {
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        assertEquals(5, catalog.encodePadding());
+        k3po.finish();
     }
 
     @Test
-    public void shouldVerifyEncodedData()
+    @Configuration("unretrievable/schema/subject/version/zilla.yaml")
+    @Specification({
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.subject.version.failed"})
+    public void shouldLogFailedRegistryResponseForSchemaId() throws Exception
     {
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        assertEquals(18, catalog.encode(0L, 0L, 1, data, 0, data.capacity(),
-            ValueConsumer.NOP, CatalogHandler.Encoder.IDENTITY));
+        k3po.finish();
     }
 
     @Test
-    public void shouldResolveSchemaIdAndProcessData()
+    @Configuration("resolve/schema/id/retry/zilla.yaml")
+    @Specification({
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.schema.id.on.retry" })
+    public void shouldResolveSchemaViaSchemaIdOnRetry() throws Exception
     {
-
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x00, 0x00, 0x00, 0x00, 0x09, 0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        int valLength = catalog.decode(0L, 0L, data, 0, data.capacity(), ValueConsumer.NOP, CatalogHandler.Decoder.IDENTITY);
-
-        assertEquals(data.capacity() - 5, valLength);
+        k3po.finish();
     }
 
     @Test
-    public void shouldResolveSchemaIdFromData()
+    @Configuration("resolve/subject/version/retry/zilla.yaml")
+    @Specification({
+        "${net}/handshake/client",
+        "${app}/handshake/server",
+        "${remote}/resolve.schema.via.subject.version.retry"})
+    public void shouldResolveSchemaIdFromCacheAndRetry() throws Exception
     {
-        KarapaceCatalogHandler catalog = new KarapaceCatalogHandler(config, context, 0L);
-
-        DirectBuffer data = new UnsafeBuffer();
-
-        byte[] bytes = {0x00, 0x00, 0x00, 0x00, 0x09, 0x06, 0x69, 0x64,
-            0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
-        data.wrap(bytes, 0, bytes.length);
-
-        int schemaId = catalog.resolve(data, 0, data.capacity());
-
-        assertEquals(9, schemaId);
+        k3po.finish();
     }
 }

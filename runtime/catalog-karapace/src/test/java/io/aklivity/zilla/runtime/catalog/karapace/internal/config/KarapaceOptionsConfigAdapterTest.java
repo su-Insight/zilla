@@ -28,6 +28,8 @@ import jakarta.json.bind.JsonbConfig;
 import org.junit.Before;
 import org.junit.Test;
 
+import io.aklivity.zilla.runtime.catalog.karapace.config.KarapaceOptionsConfig;
+
 public class KarapaceOptionsConfigAdapterTest
 {
     private Jsonb jsonb;
@@ -41,7 +43,7 @@ public class KarapaceOptionsConfigAdapterTest
     }
 
     @Test
-    public void shouldReadCondition()
+    public void shouldReadOptions()
     {
         String text =
                 "{" +
@@ -58,7 +60,7 @@ public class KarapaceOptionsConfigAdapterTest
     }
 
     @Test
-    public void shouldWriteCondition()
+    public void shouldWriteOptions()
     {
         KarapaceOptionsConfig catalog = KarapaceOptionsConfig.builder()
             .url("http://localhost:8081")

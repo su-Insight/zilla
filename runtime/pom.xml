@@ -40,16 +40,20 @@
     <module>binding-tls</module>
     <module>binding-ws</module>
     <module>catalog-apicurio</module>
+    <module>catalog-filesystem</module>
     <module>catalog-inline</module>
     <module>catalog-karapace</module>
+    <module>catalog-schema-registry</module>
     <module>common</module>
     <module>command</module>
     <module>command-metrics</module>
     <module>command-start</module>
     <module>command-stop</module>
+    <module>command-version</module>
     <module>exporter-otlp</module>
     <module>exporter-prometheus</module>
     <module>exporter-stdout</module>
+    <module>filesystem-http</module>
     <module>guard-jwt</module>
     <module>metrics-grpc</module>
     <module>metrics-http</module>
@@ -181,12 +185,22 @@
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
+        <artifactId>catalog-filesystem</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>${project.groupId}</groupId>
         <artifactId>catalog-inline</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>catalog-karapace</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>catalog-schema-registry</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -216,6 +230,11 @@
       </dependency>
       <dependency>
         <groupId>${project.groupId}</groupId>
+        <artifactId>command-version</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>${project.groupId}</groupId>
         <artifactId>exporter-otlp</artifactId>
         <version>${project.version}</version>
       </dependency>
@@ -227,6 +246,11 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>exporter-stdout</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>filesystem-http</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

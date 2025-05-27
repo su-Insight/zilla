@@ -19,6 +19,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import java.io.File;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -39,10 +40,13 @@ import io.aklivity.zilla.runtime.engine.internal.layouts.BudgetsLayout;
 public class EngineConfiguration extends Configuration
 {
     public static final String ZILLA_NAME_PROPERTY = "zilla.name";
+    public static final String ZILLA_DIRECTORY_PROPERTY = "zilla.directory";
 
     public static final boolean DEBUG_BUDGETS = Boolean.getBoolean("zilla.engine.debug.budgets");
 
     public static final PropertyDef<URL> ENGINE_CONFIG_URL;
+    public static final PropertyDef<URI> ENGINE_CONFIG_URI;
+    public static final BooleanPropertyDef ENGINE_CONFIG_WATCH;
     public static final IntPropertyDef ENGINE_CONFIG_POLL_INTERVAL_SECONDS;
     public static final PropertyDef<String> ENGINE_NAME;
     public static final PropertyDef<String> ENGINE_DIRECTORY;
@@ -80,9 +84,12 @@ public class EngineConfiguration extends Configuration
     {
         final ConfigurationDef config = new ConfigurationDef("zilla.engine");
         ENGINE_CONFIG_URL = config.property(URL.class, "config.url", EngineConfiguration::configURL, "file:zilla.yaml");
+        ENGINE_CONFIG_URI = config.property(URI.class, "config.uri", EngineConfiguration::decodeConfigURI,
+            EngineConfiguration::defaultConfigURI);
+        ENGINE_CONFIG_WATCH = config.property("config.watch", true);
         ENGINE_CONFIG_POLL_INTERVAL_SECONDS = config.property("config.poll.interval.seconds", 60);
         ENGINE_NAME = config.property("name", EngineConfiguration::defaultName);
-        ENGINE_DIRECTORY = config.property("directory", ".");
+        ENGINE_DIRECTORY = config.property("directory", EngineConfiguration::defaultDirectory);
         ENGINE_CACHE_DIRECTORY = config.property(Path.class, "cache.directory", EngineConfiguration::cacheDirectory, "cache");
         ENGINE_HOST_RESOLVER = config.property(HostResolver.class, "host.resolver",
                 EngineConfiguration::decodeHostResolver, EngineConfiguration::defaultHostResolver);
@@ -140,9 +147,20 @@ public class EngineConfiguration extends Configuration
         super(ENGINE_CONFIG, new Configuration());
     }
 
+    @Deprecated
     public URL configURL()
     {
         return ENGINE_CONFIG_URL.get(this);
+    }
+
+    public URI configURI()
+    {
+        return ENGINE_CONFIG_URI.get(this);
+    }
+
+    public boolean configWatch()
+    {
+        return ENGINE_CONFIG_WATCH.get(this);
     }
 
     public int configPollIntervalSeconds()
@@ -313,13 +331,17 @@ public class EngineConfiguration extends Configuration
 
     private static URL configURL(
         Configuration config,
-        String url
-    )
+        String url)
     {
         URL configURL = null;
         try
         {
-            configURL = URI.create(url).toURL();
+            URI uri = URI.create(url);
+            if (uri.getScheme() == null)
+            {
+                uri = URI.create(String.format("file:%s", url));
+            }
+            configURL = uri.toURL();
         }
         catch (MalformedURLException ex)
         {
@@ -346,6 +368,12 @@ public class EngineConfiguration extends Configuration
         Configuration config)
     {
         return System.getProperty(ZILLA_NAME_PROPERTY, "zilla");
+    }
+
+    private static String defaultDirectory(
+        Configuration config)
+    {
+        return System.getProperty(ZILLA_DIRECTORY_PROPERTY, ".");
     }
 
     private static HostResolver decodeHostResolver(
@@ -403,5 +431,21 @@ public class EngineConfiguration extends Configuration
 
             return addresses;
         };
+    }
+
+    private static URI decodeConfigURI(
+        Configuration config,
+        String value)
+    {
+        return value.startsWith("file:")
+            ? new File(value.substring("file:".length())).toURI()
+            : URI.create(value);
+    }
+
+    private static URI defaultConfigURI(
+        Configuration config)
+    {
+        URL url = ENGINE_CONFIG_URL.get(config);
+        return decodeConfigURI(config, url.toString());
     }
 }

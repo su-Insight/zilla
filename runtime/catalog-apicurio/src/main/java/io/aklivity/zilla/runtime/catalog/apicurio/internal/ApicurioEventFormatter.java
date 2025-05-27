@@ -18,15 +18,17 @@ import org.agrona.DirectBuffer;
 
 import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.StringFW;
 import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioEventExFW;
-import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioRemoteAccessRejectedExFW;
+import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioRetrievedArtifactIdExFW;
+import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioRetrievedArtifactSubjectVersionExFW;
+import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioUnretrievableArtifactIdExFW;
+import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioUnretrievableArtifactSubjectVersionExFW;
+import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.ApicurioUnretrievableArtifactSubjectVersionStaleArtifactExFW;
 import io.aklivity.zilla.runtime.catalog.apicurio.internal.types.event.EventFW;
 import io.aklivity.zilla.runtime.engine.Configuration;
 import io.aklivity.zilla.runtime.engine.event.EventFormatterSpi;
 
 public final class ApicurioEventFormatter implements EventFormatterSpi
 {
-    private static final String REMOTE_ACCESS_REJECTED = "REMOTE_ACCESS_REJECTED %s %s %d";
-
     private final EventFW eventRO = new EventFW();
     private final ApicurioEventExFW schemaRegistryEventExRO = new ApicurioEventExFW();
 
@@ -46,11 +48,47 @@ public final class ApicurioEventFormatter implements EventFormatterSpi
         String result = null;
         switch (extension.kind())
         {
-        case REMOTE_ACCESS_REJECTED:
+        case UNRETRIEVABLE_ARTIFACT_SUBJECT_VERSION:
         {
-            ApicurioRemoteAccessRejectedExFW ex = extension.remoteAccessRejected();
-            result = String.format(REMOTE_ACCESS_REJECTED, asString(ex.method()), asString(ex.url()),
-                ex.status());
+            ApicurioUnretrievableArtifactSubjectVersionExFW ex = extension.unretrievableArtifactSubjectVersion();
+            result = String.format(
+                    "Unable to fetch artifact for subject %s with version %s.",
+                    asString(ex.subject()),
+                    asString(ex.version())
+            );
+            break;
+        }
+        case UNRETRIEVABLE_ARTIFACT_SUBJECT_VERSION_STALE_ARTIFACT:
+        {
+            ApicurioUnretrievableArtifactSubjectVersionStaleArtifactExFW ex = extension
+                .unretrievableArtifactSubjectVersionStaleArtifact();
+            result = String.format(
+                    "Unable to fetch artifact for subject %s with version %s; using stale artifact with id %d.",
+                    asString(ex.subject()),
+                    asString(ex.version()),
+                    ex.artifactId()
+            );
+            break;
+        }
+        case UNRETRIEVABLE_ARTIFACT_ID:
+        {
+            ApicurioUnretrievableArtifactIdExFW ex = extension.unretrievableArtifactId();
+            result = String.format("Unable to fetch artifact id %d.", ex.artifactId());
+            break;
+        }
+        case RETRIEVED_ARTIFACT_SUBJECT_VERSION:
+        {
+            ApicurioRetrievedArtifactSubjectVersionExFW ex = extension.retrievedArtifactSubjectVersion();
+            result = String.format("Successfully fetched artifact for subject %s with version %s.",
+                    asString(ex.subject()),
+                    asString(ex.version())
+            );
+            break;
+        }
+        case RETRIEVED_ARTIFACT_ID:
+        {
+            ApicurioRetrievedArtifactIdExFW ex = extension.retrievedArtifactId();
+            result = String.format("Successfully fetched artifact id %d.", ex.artifactId());
             break;
         }
         }

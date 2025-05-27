@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
@@ -42,6 +43,7 @@ import org.agrona.collections.Int2IntHashMap;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
 
+import io.aklivity.zilla.runtime.binding.kafka.config.KafkaTopicHeaderType;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaBinding;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaConfiguration;
 import io.aklivity.zilla.runtime.binding.kafka.internal.cache.KafkaCache;
@@ -482,6 +484,7 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
         private final ConverterHandler convertValue;
         private final MutableInteger entryMark;
         private final MutableInteger valueMark;
+        private final List<KafkaTopicHeaderType> headerTypes;
 
         private long leaderId;
         private long initialId;
@@ -531,6 +534,7 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
             this.convertValue = topicType.valueReader;
             this.entryMark = new MutableInteger(0);
             this.valueMark = new MutableInteger(0);
+            this.headerTypes = topicType.headers;
         }
 
         private void onServerFanoutMemberOpening(
@@ -775,8 +779,8 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
                 }
 
                 partition.writeEntry(context, traceId, routedId, partitionOffset, entryMark, valueMark, 0L, producerId,
-                        EMPTY_KEY, EMPTY_HEADERS, EMPTY_OCTETS, null,
-                        entryFlags, KafkaDeltaType.NONE, convertKey, convertValue, verbose);
+                        EMPTY_KEY, EMPTY_HEADERS, EMPTY_OCTETS,
+                    entryFlags, KafkaDeltaType.NONE, convertKey, convertValue, verbose, headerTypes);
 
                 if (result == KafkaTransactionResult.ABORT)
                 {
@@ -866,28 +870,26 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
 
                     final long retainAt = partition.retainAt(nextHead.segment());
                     this.retainId = doServerFanoutInitialSignalAt(retainAt, traceId, SIGNAL_SEGMENT_RETAIN);
-
-                    if (deleteId == NO_CANCEL_ID &&
-                        partition.cleanupPolicy().delete() &&
-                        !nextHead.previous().sentinel())
-                    {
-                        final long deleteAt = partition.deleteAt(nextHead.previous().segment(), retentionMillisMax);
-                        this.deleteId = doServerFanoutInitialSignalAt(deleteAt, traceId, SIGNAL_SEGMENT_DELETE);
-                    }
                 }
 
+                if (deleteId == NO_CANCEL_ID &&
+                    partition.cleanupPolicy().delete())
+                {
+                    final long deleteAt = partition.deleteAt(nextHead.segment(), retentionMillisMax);
+                    this.deleteId = doServerFanoutInitialSignalAt(deleteAt, traceId, SIGNAL_SEGMENT_DELETE);
+                }
+
+                IntFunction<KafkaCacheEntryFW> findAncestor =
+                    kh -> findAndMarkAncestor(key, nextHead, kh, partitionOffset);
                 final int entryFlags = (flags & FLAGS_SKIP) != 0x00 ? CACHE_ENTRY_FLAGS_ABORTED : 0x00;
-                final long keyHash = partition.computeKeyHash(key);
-                final KafkaCacheEntryFW ancestor = findAndMarkAncestor(key, nextHead, (int) keyHash, partitionOffset);
                 partition.writeEntryStart(context, traceId, routedId, partitionOffset, entryMark, valueMark, timestamp,
-                    producerId, key, keyHash, valueLength, ancestor, entryFlags, deltaType, valueFragment, convertKey,
+                    producerId, key, valueLength, findAncestor, entryFlags, deltaType, valueFragment, convertKey,
                     convertValue, verbose);
             }
 
             if (valueFragment != null)
             {
-                partition.writeEntryContinue(context, traceId, routedId, flags, partitionOffset, entryMark, valueMark,
-                    valueFragment, convertValue, verbose);
+                partition.writeEntryContinue(valueFragment);
             }
 
             if ((flags & FLAGS_FIN) != 0x00)
@@ -906,7 +908,8 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
                 assert partitionId == partition.id();
                 assert partitionOffset >= this.partitionOffset;
 
-                partition.writeEntryFinish(headers, deltaType);
+                partition.writeEntryFinish(headers, deltaType, context, traceId, routedId, flags, partitionOffset,
+                    entryMark, valueMark, convertValue, verbose, headerTypes);
 
                 this.partitionOffset = partitionOffset;
                 this.stableOffset = stableOffset;
@@ -1187,15 +1190,16 @@ public final class KafkaCacheServerFetchFactory implements BindingHandler
             final long now = currentTimeMillis();
 
             Node segmentNode = partition.sentinel().next();
-            while (segmentNode != partition.head() &&
-                    partition.deleteAt(segmentNode.segment(), retentionMillisMax) <= now)
+            while (!segmentNode.sentinel() &&
+                partition.deleteAt(segmentNode.segment(), retentionMillisMax) <= now)
             {
                 segmentNode.remove();
                 segmentNode = segmentNode.next();
             }
+
             assert segmentNode != null;
 
-            if (segmentNode != partition.head())
+            if (segmentNode != partition.sentinel())
             {
                 final long deleteAt = partition.deleteAt(segmentNode.segment(), retentionMillisMax);
                 this.deleteId = doServerFanoutInitialSignalAt(deleteAt, traceId, SIGNAL_SEGMENT_DELETE);
