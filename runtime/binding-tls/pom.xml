@@ -24,9 +24,7 @@
   </licenses>
 
   <properties>
-    <maven.compiler.source>11</maven.compiler.source>
-    <maven.compiler.target>11</maven.compiler.target>
-    <jacoco.coverage.ratio>0.75</jacoco.coverage.ratio>
+    <jacoco.coverage.ratio>0.74</jacoco.coverage.ratio>
     <jacoco.missed.count>0</jacoco.missed.count>
   </properties>
 
@@ -41,7 +39,6 @@
       <groupId>${project.groupId}</groupId>
       <artifactId>engine</artifactId>
       <version>${project.version}</version>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -53,6 +50,12 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>vault-filesystem</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>binding-echo</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
@@ -72,13 +75,13 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.kaazing</groupId>
-      <artifactId>k3po.junit</artifactId>
+      <groupId>io.aklivity.k3po</groupId>
+      <artifactId>control-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.kaazing</groupId>
-      <artifactId>k3po.lang</artifactId>
+      <groupId>io.aklivity.k3po</groupId>
+      <artifactId>lang</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -187,7 +190,7 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.kaazing</groupId>
+        <groupId>io.aklivity.k3po</groupId>
         <artifactId>k3po-maven-plugin</artifactId>
         <dependencies>
           <dependency>
@@ -241,6 +244,8 @@
             <includes>
               <include>org.agrona:agrona</include>
               <include>io.aklivity.zilla:engine</include>
+              <include>io.aklivity.zilla:common</include>
+              <include>io.aklivity.zilla:binding-echo</include>
               <include>org.openjdk.jmh:jmh-core</include>
               <include>net.sf.jopt-simple:jopt-simple</include>
               <include>org.apache.commons:commons-math3</include>

@@ -28,6 +28,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.LongFunction;
 import java.util.function.LongUnaryOperator;
@@ -176,7 +177,12 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
     private final Int2ObjectHashMap<PartitionOffset> offsetsPerPacketId;
     private final Long2ObjectHashMap<OffsetHighWaterMark> highWaterMarks;
     private final Object2IntHashMap<String> qosLevels;
+    private final String groupIdPrefixFormat;
+    private final Function<Long, String> supplyNamespace;
+    private final Function<Long, String> supplyLocalName;
+
     private int reconnectAttempt;
+    private String groupIdPrefix;
 
     public MqttKafkaSubscribeFactory(
         MqttKafkaConfiguration config,
@@ -209,6 +215,9 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
         this.qosLevels.put("0", 0);
         this.qosLevels.put("1", 1);
         this.qosLevels.put("2", 2);
+        this.groupIdPrefixFormat = config.groupIdPrefixFormat();
+        this.supplyNamespace = context::supplyNamespace;
+        this.supplyLocalName = context::supplyLocalName;
     }
 
     @Override
@@ -230,6 +239,8 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
         this.qosNames.put(0, new String16FW("0"));
         this.qosNames.put(1, new String16FW("1"));
         this.qosNames.put(2, new String16FW("2"));
+        this.groupIdPrefix =
+            String.format(groupIdPrefixFormat, supplyNamespace.apply(bindingId), supplyLocalName.apply(bindingId));
     }
 
     @Override
@@ -855,7 +866,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
         {
             this.originId = originId;
             this.routedId = route.id;
-            this.topic = route.messages;
+            this.topic = route.with.resolveMessages();
             this.serverRef = serverRef;
             this.initialId = supplyInitialId.applyAsLong(routedId);
             this.replyId = supplyReplyId.applyAsLong(initialId);
@@ -1118,7 +1129,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
         {
             this.originId = originId;
             this.routedId = route.id;
-            this.topic = route.messages;
+            this.topic = route.with.resolveMessages();
             this.topicKey = System.identityHashCode(topic.asString().intern());
             this.routeConfig = route;
             this.mqtt = mqtt;
@@ -2072,7 +2083,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
                                 if (((filters >> i) & 1) == 1)
                                 {
                                     long subscriptionId = mqtt.retainedSubscriptionIds.get(i);
-                                    if (mqtt.retainAsPublished.getOrDefault(subscriptionId, false))
+                                    if (mqtt.retainAsPublished.getOrDefault(subscriptionId, Boolean.FALSE))
                                     {
                                         flag |= RETAIN_FLAG;
                                     }
@@ -2654,7 +2665,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
                     m.topic(topic);
                     if (qos >= MqttQoS.AT_LEAST_ONCE.value())
                     {
-                        m.groupId(clientId);
+                        m.groupId(String.format("%s-%s", groupIdPrefix, clientId.asString()));
                     }
                     m.partitionsItem(p ->
                         p.partitionId(offsetType.value())

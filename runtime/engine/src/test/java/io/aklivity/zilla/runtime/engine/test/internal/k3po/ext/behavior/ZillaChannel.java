@@ -30,9 +30,9 @@ import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelSink;
 import org.jboss.netty.channel.Channels;
 import org.jboss.netty.channel.MessageEvent;
-import org.kaazing.k3po.driver.internal.netty.bootstrap.channel.AbstractChannel;
-import org.kaazing.k3po.driver.internal.netty.channel.ChannelAddress;
 
+import io.aklivity.k3po.runtime.driver.internal.netty.bootstrap.channel.AbstractChannel;
+import io.aklivity.k3po.runtime.driver.internal.netty.channel.ChannelAddress;
 import io.aklivity.zilla.runtime.engine.internal.budget.DefaultBudgetCreditor;
 import io.aklivity.zilla.runtime.engine.internal.budget.DefaultBudgetDebitor;
 import io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.stream.Capability;
@@ -211,6 +211,11 @@ public abstract class ZillaChannel extends AbstractChannel<ZillaChannelConfig>
         ChannelAddress localAddress = this.getLocalAddress();
         String description = localAddress != null ? localAddress.toString() : super.toString();
         return String.format("%s [sourceId=%d, targetId=%d]", description, sourceId, targetId);
+    }
+
+    public long timestamp()
+    {
+        return getConfig().hasTimestamps() ? System.nanoTime() : 0L;
     }
 
     public void acknowledgeBytes(

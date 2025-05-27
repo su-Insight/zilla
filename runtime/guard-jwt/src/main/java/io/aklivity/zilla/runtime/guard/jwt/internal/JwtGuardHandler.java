@@ -128,6 +128,7 @@ public class JwtGuardHandler implements GuardHandler
     {
         JwtSession session = null;
         String subject = null;
+        String reason = "";
 
         authorize:
         try
@@ -142,6 +143,7 @@ public class JwtGuardHandler implements GuardHandler
                 key == null ||
                 !Objects.equals(alg, key.getAlgorithm()))
             {
+                reason = "Invalid alg or key.";
                 break authorize;
             }
 
@@ -149,6 +151,7 @@ public class JwtGuardHandler implements GuardHandler
             signature.setKey(key.getKey());
             if (!signature.verifySignature())
             {
+                reason = "Unable to verify key signature.";
                 break authorize;
             }
 
@@ -162,10 +165,15 @@ public class JwtGuardHandler implements GuardHandler
 
             long now = Instant.now().toEpochMilli();
             if (notBefore != null && now < notBefore.getValueInMillis() ||
-                notAfter != null && now > notAfter.getValueInMillis() ||
-                issuer == null || !issuer.equals(this.issuer) ||
+                notAfter != null && now > notAfter.getValueInMillis())
+            {
+                reason = "Token is expired.";
+                break authorize;
+            }
+            if (issuer == null || !issuer.equals(this.issuer) ||
                 audience == null || !audience.contains(this.audience))
             {
+                reason = "Invalid issuer or audience.";
                 break authorize;
             }
 
@@ -178,6 +186,7 @@ public class JwtGuardHandler implements GuardHandler
             JwtSessionStore sessionStore = supplySessionStore(contextId);
             session = sessionStore.supplySession(subject, roles);
 
+            session.credentials = credentials;
             session.roles = roles;
             session.expiresAt = notAfter != null
                 ? Math.max(session.expiresAt, notAfter.getValueInMillis())
@@ -190,11 +199,11 @@ public class JwtGuardHandler implements GuardHandler
         }
         catch (JoseException | InvalidJwtException | MalformedClaimException ex)
         {
-            // not authorized
+            reason = ex.getMessage();
         }
         if (session == null)
         {
-            event.authorizationFailed(traceId, bindingId, subject);
+            event.authorizationFailed(traceId, bindingId, subject, reason);
         }
         return session != null ? session.authorized : NOT_AUTHORIZED;
     }
@@ -222,6 +231,14 @@ public class JwtGuardHandler implements GuardHandler
     {
         JwtSession session = sessionsById.get(sessionId);
         return session != null ? session.subject : null;
+    }
+
+    @Override
+    public String credentials(
+        long sessionId)
+    {
+        JwtSession session = sessionsById.get(sessionId);
+        return session != null ? session.credentials : null;
     }
 
     @Override
@@ -337,6 +354,7 @@ public class JwtGuardHandler implements GuardHandler
         private final String subject;
         private final Consumer<JwtSession> unshare;
 
+        private String credentials;
         private long expiresAt;
         private long challengeAt;
         private long challengedAt;

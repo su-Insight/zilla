@@ -21,9 +21,11 @@
 
     <module>binding-amqp</module>
 
+    <module>catalog-filesystem.spec</module>
+    <module>catalog-filesystem</module>
+
     <module>command-log</module>
     <module>command-dump</module>
-    <module>command-generate</module>
     <module>command-tune</module>
   </modules>
 
@@ -32,6 +34,11 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>binding-amqp</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>catalog-filesystem</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -47,11 +54,6 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>command-dump</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${project.groupId}</groupId>
-        <artifactId>command-generate</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>
