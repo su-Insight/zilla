@@ -21,12 +21,15 @@ import java.util.Map;
 
 import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiOptionsConfig;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiBinding;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiMessage;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiOperation;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiParameter;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiSchema;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiSecurityScheme;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiServer;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiChannelView;
-import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiMessageView;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiSecuritySchemeView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
 import io.aklivity.zilla.runtime.binding.http.config.HttpAuthorizationConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpConditionConfig;
@@ -35,38 +38,48 @@ import io.aklivity.zilla.runtime.binding.http.config.HttpOptionsConfigBuilder;
 import io.aklivity.zilla.runtime.binding.http.config.HttpRequestConfig.Method;
 import io.aklivity.zilla.runtime.binding.http.config.HttpRequestConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
-import io.aklivity.zilla.runtime.engine.config.CatalogedConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.GuardedConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.RouteConfigBuilder;
+import io.aklivity.zilla.runtime.model.core.config.DoubleModelConfig;
+import io.aklivity.zilla.runtime.model.core.config.FloatModelConfig;
 import io.aklivity.zilla.runtime.model.core.config.Int32ModelConfig;
+import io.aklivity.zilla.runtime.model.core.config.Int64ModelConfig;
 import io.aklivity.zilla.runtime.model.core.config.StringModelConfig;
+import io.aklivity.zilla.runtime.model.core.config.StringModelConfigBuilder;
+import io.aklivity.zilla.runtime.model.core.config.StringPattern;
+import io.aklivity.zilla.runtime.model.core.internal.StringModel;
 import io.aklivity.zilla.runtime.model.json.config.JsonModelConfig;
 
 public class AsyncapiHttpProtocol extends AsyncapiProtocol
 {
-    private static final Map<String, ModelConfig> MODELS = Map.of(
-        "string", StringModelConfig.builder().build(),
-        "integer", Int32ModelConfig.builder().build()
-    );
     private static final String SCHEME = "http";
     private static final String SECURE_PROTOCOL = "https";
 
+    protected static final Map<String, ModelConfig> MODELS = Map.of(
+        "integer", Int32ModelConfig.builder().build(),
+        "integer:int32", Int32ModelConfig.builder().build(),
+        "integer:int64", Int64ModelConfig.builder().build(),
+        "number", FloatModelConfig.builder().build(),
+        "number:float", FloatModelConfig.builder().build(),
+        "number:double", DoubleModelConfig.builder().build()
+    );
+
     private static final String SECURE_SCHEME = "https";
     private final Map<String, String> securitySchemes;
-    private final boolean isJwtEnabled;
+    private final boolean isOauthEnabled;
     private final String guardName;
     private final HttpAuthorizationConfig authorization;
 
     protected AsyncapiHttpProtocol(
         String qname,
-        Asyncapi asyncApi,
+        List<Asyncapi> asyncapis,
         AsyncapiOptionsConfig options,
         String protocol)
     {
-        super(qname, asyncApi, protocol, SCHEME);
+        super(qname, asyncapis, protocol, SCHEME);
         this.securitySchemes = resolveSecuritySchemes();
-        this.isJwtEnabled = !securitySchemes.isEmpty();
+        this.isOauthEnabled = !securitySchemes.isEmpty();
 
         final HttpOptionsConfig httpOptions = options.http;
         this.guardName = httpOptions != null ? String.format("%s:%s", qname, httpOptions.authorization.name) : null;
@@ -89,28 +102,61 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
 
     @Override
     public <C> BindingConfigBuilder<C> injectProtocolServerRoutes(
-        BindingConfigBuilder<C> binding)
+        BindingConfigBuilder<C> binding,
+        AsyncapiOptionsConfig options)
     {
-        for (Map.Entry<String, AsyncapiServer> entry : asyncApi.servers.entrySet())
+        for (Asyncapi asyncapi : asyncapis)
         {
-            AsyncapiServerView server = AsyncapiServerView.of(entry.getValue());
-            for (String name : asyncApi.operations.keySet())
+            for (Map.Entry<String, AsyncapiServer> entry : asyncapi.servers.entrySet())
             {
-                AsyncapiOperation operation = asyncApi.operations.get(name);
-                AsyncapiChannelView channel = AsyncapiChannelView.of(asyncApi.channels, operation.channel);
-                String path = channel.address().replaceAll("\\{[^}]+\\}", "*");
-                String method = operation.bindings.get("http").method;
-                binding
-                    .route()
-                        .exit(qname)
-                        .when(HttpConditionConfig::builder)
-                            .header(":scheme", server.scheme())
-                            .header(":authority", server.authority())
-                            .header(":path", path)
-                            .header(":method", method)
-                            .build()
-                        .inject(route -> injectHttpServerRouteGuarded(route, server))
-                    .build();
+                AsyncapiServerView server = AsyncapiServerView.of(entry.getValue());
+                if ("http".equals(server.protocol()))
+                {
+                    for (String name : asyncapi.operations.keySet())
+                    {
+                        AsyncapiOperation operation = asyncapi.operations.get(name);
+                        AsyncapiChannelView channel = AsyncapiChannelView.of(asyncapi.channels, operation.channel);
+                        String path = channel.address().replaceAll("\\{[^}]+\\}", "*");
+                        if (operation.bindings != null)
+                        {
+                            AsyncapiBinding httpBinding = operation.bindings.get("http");
+                            if (httpBinding != null)
+                            {
+                                String method = httpBinding.method;
+                                binding
+                                    .route()
+                                    .exit(qname)
+                                    .when(HttpConditionConfig::builder)
+                                        .header(":path", path)
+                                        .header(":method", method)
+                                        .build()
+                                    .inject(route -> injectHttpServerRouteGuarded(
+                                        route, options.http, asyncapi, operation.security))
+                                    .build();
+                            }
+                        }
+                    }
+                }
+                else if ("sse".equals(server.protocol()))
+                {
+                    for (String name : asyncapi.operations.keySet())
+                    {
+                        AsyncapiOperation operation = asyncapi.operations.get(name);
+                        if (operation.bindings == null)
+                        {
+                            AsyncapiChannelView channel = AsyncapiChannelView.of(asyncapi.channels, operation.channel);
+                            String path = channel.address().replaceAll("\\{[^}]+\\}", "*");
+                            binding
+                                .route()
+                                .exit("sse_server0")
+                                .when(HttpConditionConfig::builder)
+                                    .header(":path", path)
+                                    .header(":method", "GET")
+                                    .build()
+                                .build();
+                        }
+                    }
+                }
             }
         }
         return binding;
@@ -125,9 +171,9 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
     private <C> HttpOptionsConfigBuilder<C> injectHttpServerOptions(
         HttpOptionsConfigBuilder<C> options)
     {
-        if (isJwtEnabled)
+        if (isOauthEnabled)
         {
-            options.authorization(authorization).build();
+            options.authorization(authorization);
         }
         return options;
     }
@@ -135,22 +181,26 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
     private <C> HttpOptionsConfigBuilder<C> injectHttpServerRequests(
         HttpOptionsConfigBuilder<C> options)
     {
-        for (String name : asyncApi.operations.keySet())
+        for (Asyncapi asyncapi : asyncapis)
         {
-            AsyncapiOperation operation = asyncApi.operations.get(name);
-            AsyncapiChannelView channel = AsyncapiChannelView.of(asyncApi.channels, operation.channel);
-            String path = channel.address();
-            Method method = Method.valueOf(operation.bindings.get("http").method);
-            if (channel.messages() != null && !channel.messages().isEmpty() ||
-                channel.parameters() != null && !channel.parameters().isEmpty())
+            for (String name : asyncapi.operations.keySet())
             {
-                options
-                    .request()
-                        .path(path)
-                        .method(method)
-                        .inject(request -> injectContent(request, channel.messages()))
-                        .inject(request -> injectPathParams(request, channel.parameters()))
+                AsyncapiOperation operation = asyncapi.operations.get(name);
+                AsyncapiChannelView channel = AsyncapiChannelView.of(asyncapi.channels, operation.channel);
+                String path = channel.address();
+
+                if (operation.bindings != null && channel.messages() != null && !channel.messages().isEmpty() ||
+                    channel.parameters() != null && !channel.parameters().isEmpty())
+                {
+                    Method method = Method.valueOf(operation.bindings.get("http").method);
+                    options
+                        .request()
+                            .path(path)
+                            .method(method)
+                            .inject(request -> injectContent(request, asyncapi, channel.messages()))
+                            .inject(request -> injectPathParams(request, channel.parameters()))
                         .build();
+                }
             }
         }
         return options;
@@ -158,39 +208,20 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
 
     private <C> HttpRequestConfigBuilder<C> injectContent(
         HttpRequestConfigBuilder<C> request,
+        Asyncapi asyncapi,
         Map<String, AsyncapiMessage> messages)
     {
         if (messages != null)
         {
-            if (hasJsonContentType())
-            {
-                request.
-                    content(JsonModelConfig::builder)
-                        .catalog()
-                            .name(INLINE_CATALOG_NAME)
-                            .inject(catalog -> injectSchemas(catalog, messages))
-                            .build()
-                        .build();
-            }
-        }
-        return request;
-    }
-
-    private <C> CatalogedConfigBuilder<C> injectSchemas(
-        CatalogedConfigBuilder<C> catalog,
-        Map<String, AsyncapiMessage> messages)
-    {
-        for (String name : messages.keySet())
-        {
-            AsyncapiMessageView message = AsyncapiMessageView.of(asyncApi.components.messages, messages.get(name));
-            String subject = message.refKey() != null ? message.refKey() : name;
-            catalog
-                .schema()
-                    .subject(subject)
-                    .build()
+            request.
+                content(JsonModelConfig::builder)
+                .catalog()
+                .name(INLINE_CATALOG_NAME)
+                .inject(cataloged -> injectValueSchemas(cataloged, asyncapi, messages))
+                .build()
                 .build();
         }
-        return catalog;
+        return request;
     }
 
     private <C> HttpRequestConfigBuilder<C> injectPathParams(
@@ -202,9 +233,25 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
             for (String name : parameters.keySet())
             {
                 AsyncapiParameter parameter = parameters.get(name);
-                if (parameter.schema != null && parameter.schema.type != null)
+                AsyncapiSchema schema = parameter.schema;
+                if (schema != null && schema.type != null)
                 {
-                    ModelConfig model = MODELS.get(parameter.schema.type);
+                    String format = schema.format;
+                    String type = schema.type;
+                    ModelConfig model;
+                    if (StringModel.NAME.equals(type))
+                    {
+                        StringModelConfigBuilder<StringModelConfig> builder = StringModelConfig.builder();
+                        if (format != null)
+                        {
+                            builder.pattern(StringPattern.of(format));
+                        }
+                        model = builder.build();
+                    }
+                    else
+                    {
+                        model = MODELS.get(format != null ? String.format("%s:%s", type, format) : type);
+                    }
                     if (model != null)
                     {
                         request
@@ -221,24 +268,22 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
 
     private <C> RouteConfigBuilder<C> injectHttpServerRouteGuarded(
         RouteConfigBuilder<C> route,
-        AsyncapiServerView server)
+        HttpOptionsConfig options,
+        Asyncapi asyncapi,
+        List<AsyncapiSecurityScheme> securities)
     {
-        if (server.security() != null)
+        if (securities != null && !securities.isEmpty())
         {
-            for (Map<String, List<String>> securityItem : server.security())
+            AsyncapiSecuritySchemeView security =
+                AsyncapiSecuritySchemeView.of(asyncapi.components.securitySchemes, securities.get(0));
+
+            if (isOauthEnabled && "oauth2".equals(security.type()))
             {
-                for (String securityItemLabel : securityItem.keySet())
-                {
-                    if (isJwtEnabled && "jwt".equals(securitySchemes.get(securityItemLabel)))
-                    {
-                        route
-                            .guarded()
-                                .name(guardName)
-                                .inject(guarded -> injectGuardedRoles(guarded, securityItem.get(securityItemLabel)))
-                                .build();
-                        break;
-                    }
-                }
+                route
+                    .guarded()
+                    .name(options.authorization.qname)
+                    .inject(guarded -> injectGuardedRoles(guarded, security.scopes()))
+                    .build();
             }
         }
         return route;

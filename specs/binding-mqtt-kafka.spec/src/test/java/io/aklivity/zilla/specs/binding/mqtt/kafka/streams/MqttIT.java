@@ -22,8 +22,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
+
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 
 public class MqttIT
 {
@@ -139,6 +140,24 @@ public class MqttIT
         "${mqtt}/publish.topic.space/client",
         "${mqtt}/publish.topic.space/server"})
     public void shouldSendUsingTopicSpace() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.topic.space.with.params/client",
+        "${mqtt}/publish.topic.space.with.params/server"})
+    public void shouldSendUsingTopicSpaceWithParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.reject.qos2/client",
+        "${mqtt}/publish.reject.qos2/server"})
+    public void shouldRejectPublishWhenTopicSpaceWithParams() throws Exception
     {
         k3po.finish();
     }
@@ -507,6 +526,15 @@ public class MqttIT
 
     @Test
     @Specification({
+        "${mqtt}/session.reject.non.compacted.sessions.topic/client",
+        "${mqtt}/session.reject.non.compacted.sessions.topic/server"})
+    public void shouldRejectSessionNonCompactedSessionsTopic() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${mqtt}/session.subscribe.via.session.state/client",
         "${mqtt}/session.subscribe.via.session.state/server"})
     public void shouldReceiveMessageSubscribedViaSessionState() throws Exception
@@ -760,6 +788,15 @@ public class MqttIT
         "${mqtt}/subscribe.receive.message.qos2/client",
         "${mqtt}/subscribe.receive.message.qos2/server"})
     public void shouldReceiveMessageQoS2() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/subscribe.qos2.version1.offset.metadata/client",
+        "${mqtt}/subscribe.qos2.version1.offset.metadata/server"})
+    public void shouldReceiveMessageQoS2WithVersion1OffsetMetadata() throws Exception
     {
         k3po.finish();
     }

@@ -22,9 +22,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
 
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 import io.aklivity.zilla.runtime.engine.test.EngineRule;
 import io.aklivity.zilla.runtime.engine.test.annotation.Configuration;
 
@@ -53,6 +53,17 @@ public class OpenapiServerIT
         "${openapi}/create.pet/server"
     })
     public void shouldCreatePet() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("server.multiple.specs.yaml")
+    @Specification({
+        "${http}/create.pet.and.item/client",
+        "${openapi}/create.pet.and.item/server"
+    })
+    public void shouldCreatePetAndItem() throws Exception
     {
         k3po.finish();
     }

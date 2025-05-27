@@ -59,6 +59,19 @@ class TestExporterHandler implements ExporterHandler
     @Override
     public void stop()
     {
+        try
+        {
+            // drain events
+            while (options.events != null &&
+                    eventIndex < options.events.size())
+            {
+                readEvent.read(this::handleEvent, Integer.MAX_VALUE);
+            }
+        }
+        catch (Exception ex)
+        {
+            assert options.events == null || eventIndex == options.events.size();
+        }
     }
 
     private void handleEvent(
@@ -68,16 +81,19 @@ class TestExporterHandler implements ExporterHandler
         int length)
     {
         final EventFW event = eventRO.wrap(buffer, index, index + length);
+
         String qname = context.supplyQName(event.namespacedId());
         String id = context.supplyLocalName(event.id());
+        String name = context.supplyEventName(event.id());
         String message = formatter.format(msgTypeId, buffer, index, length);
+
         if (options.events != null && eventIndex < options.events.size())
         {
             TestExporterOptionsConfig.Event e = options.events.get(eventIndex);
-            if (!qname.equals(e.qName) || !id.equals(e.id) || !message.equals(e.message))
+            if (!qname.equals(e.qName) || !id.equals(e.id) || !name.equals(e.name) || !message.equals(e.message))
             {
-                throw new IllegalStateException(String.format("event mismatch, expected: %s %s %s, got: %s %s %s",
-                    e.qName, e.id, e.message, qname, id, message));
+                throw new IllegalStateException(String.format("event mismatch, expected: %s %s %s %s, actual: %s %s %s %s",
+                    e.qName, e.id, e.name, e.message, qname, id, name, message));
             }
             eventIndex++;
         }

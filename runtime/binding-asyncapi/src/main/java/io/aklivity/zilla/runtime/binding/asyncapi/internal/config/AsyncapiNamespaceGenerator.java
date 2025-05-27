@@ -14,39 +14,45 @@
  */
 package io.aklivity.zilla.runtime.binding.asyncapi.internal.config;
 
-import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.MINIMIZE_QUOTES;
-import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER;
+import static io.aklivity.zilla.runtime.common.feature.FeatureFilter.featureEnabled;
 import static java.util.stream.Collectors.toList;
 import static org.agrona.LangUtil.rethrowUnchecked;
 
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.ToLongFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
+import jakarta.json.JsonValue;
+import jakarta.json.JsonWriter;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
 
 import org.agrona.collections.MutableInteger;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-
 import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiOptionsConfig;
 import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiServerConfig;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
-import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiSchema;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiKafkaServerBindings;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiSchemaItem;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiServer;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiTrait;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiSchemaView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
 import io.aklivity.zilla.runtime.catalog.inline.config.InlineOptionsConfig;
 import io.aklivity.zilla.runtime.catalog.inline.config.InlineSchemaConfigBuilder;
+import io.aklivity.zilla.runtime.catalog.karapace.config.KarapaceOptionsConfig;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.MetricRefConfig;
@@ -56,27 +62,40 @@ import io.aklivity.zilla.runtime.engine.config.TelemetryRefConfigBuilder;
 
 public abstract class AsyncapiNamespaceGenerator
 {
-    protected static final String INLINE_CATALOG_NAME = "catalog0";
+    protected static final String CATALOG_NAME = "catalog0";
     protected static final String INLINE_CATALOG_TYPE = "inline";
+    protected static final String KARAPACE_CATALOG_TYPE = "karapace";
     protected static final String VERSION_LATEST = "latest";
-    protected static final String APPLICATION_JSON = "application/json";
     protected static final AsyncapiOptionsConfig EMPTY_OPTION =
         new AsyncapiOptionsConfig(null, null, null, null, null, null, null);
     protected static final Pattern VARIABLE = Pattern.compile("\\{([^}]*.?)\\}");
     protected final Matcher variable = VARIABLE.matcher("");
 
-    protected Asyncapi asyncapi;
     protected Map<String, Asyncapi> asyncapis;
     protected boolean isTlsEnabled;
-    protected AsyncapiProtocol protocol;
     protected String qname;
     protected String namespace;
     protected String qvault;
     protected String vault;
 
+    public void init(
+        BindingConfig binding)
+    {
+        this.qname = binding.qname;
+        this.namespace = binding.namespace;
+        this.qvault = binding.qvault;
+        this.vault = binding.vault;
+
+        AsyncapiOptionsConfig options = (AsyncapiOptionsConfig) binding.options;
+        if (options.http != null && options.http.authorization != null)
+        {
+            options.http.authorization.qname = String.format("%s:%s", namespace, options.http.authorization.name);
+        }
+    }
+
     public NamespaceConfig generate(
         BindingConfig binding,
-        Asyncapi asyncapi)
+        AsyncapiNamespaceConfig namespaceConfig)
     {
         return null;
     }
@@ -84,7 +103,8 @@ public abstract class AsyncapiNamespaceGenerator
     public NamespaceConfig generateProxy(
         BindingConfig binding,
         Map<String, Asyncapi> asyncapis,
-        ToLongFunction<String> resolveApiId)
+        ToLongFunction<String> resolveApiId,
+        List<String> labels)
     {
         return null;
     }
@@ -92,9 +112,10 @@ public abstract class AsyncapiNamespaceGenerator
     protected AsyncapiProtocol resolveProtocol(
         String protocolName,
         AsyncapiOptionsConfig options,
+        List<Asyncapi> asyncapis,
         List<AsyncapiServerView> servers)
     {
-        Pattern pattern = Pattern.compile("(http|mqtt|kafka)");
+        Pattern pattern = Pattern.compile("(http|sse|mqtt|kafka)");
         Matcher matcher = pattern.matcher(protocolName);
         AsyncapiProtocol protocol = null;
         if (matcher.find())
@@ -102,14 +123,22 @@ public abstract class AsyncapiNamespaceGenerator
             switch (matcher.group())
             {
             case "http":
-                protocol = new AsyncapiHttpProtocol(qname, asyncapi, options, protocolName);
+                protocol = new AsyncapiHttpProtocol(qname, asyncapis, options, protocolName);
+                break;
+            case "sse":
+            case "secure-sse":
+                if (featureEnabled(AsyncapiSseProtocol.class))
+                {
+                    final boolean httpServerAvailable = servers.stream().anyMatch(s -> "http".equals(s.protocol()));
+                    protocol = new AsyncapiSseProtocol(qname, httpServerAvailable, asyncapis, options, protocolName);
+                }
                 break;
             case "mqtt":
-                protocol = new AsyncapiMqttProtocol(qname, asyncapi, options, protocolName, namespace);
+                protocol = new AsyncapiMqttProtocol(qname, asyncapis, options, protocolName, namespace);
                 break;
             case "kafka":
             case "kafka-secure":
-                protocol = new AyncapiKafkaProtocol(qname, asyncapi, servers, options, protocolName);
+                protocol = new AyncapiKafkaProtocol(qname, asyncapis, servers, options, protocolName);
                 break;
             }
         }
@@ -121,9 +150,10 @@ public abstract class AsyncapiNamespaceGenerator
     }
 
     protected List<AsyncapiServerView> filterAsyncapiServers(
-        Map<String, AsyncapiServer> servers,
+        Asyncapi asyncapi,
         List<AsyncapiServerConfig> serverConfigs)
     {
+        final Map<String, AsyncapiServer> servers = asyncapi.servers;
         List<AsyncapiServerView> filtered;
         Map<String, AsyncapiServerView> serverViews = servers.entrySet().stream().collect(Collectors.toMap(
             Map.Entry::getKey, e -> AsyncapiServerView.of(e.getValue(), asyncapi.components.serverVariables)));
@@ -140,7 +170,7 @@ public abstract class AsyncapiNamespaceGenerator
                                 server.urlMatcher.reset(sc.url).matches() &&
                                 server.pathnameMatcher.reset(sc.pathname).matches();
                         })
-                    .collect(Collectors.toList())));
+                    .toList()));
         }
         else
         {
@@ -176,19 +206,55 @@ public abstract class AsyncapiNamespaceGenerator
         return ports;
     }
 
+    public int[] resolvePortForServer(
+        AsyncapiServerView server,
+        boolean secure)
+    {
+        int[] ports = {};
+
+        if (server.getAsyncapiProtocol().isSecure() == secure)
+        {
+            ports = new int[] { server.getPort() };
+        }
+
+        return ports;
+    }
+
     protected <C> NamespaceConfigBuilder<C> injectCatalog(
         NamespaceConfigBuilder<C> namespace,
-        Asyncapi asyncapi)
+        List<Asyncapi> asyncapis)
     {
-        if (asyncapi.components != null && asyncapi.components.schemas != null && !asyncapi.components.schemas.isEmpty())
+        Optional<AsyncapiServer> server = asyncapis.stream()
+            .filter(a -> a.servers.entrySet().stream().anyMatch(s ->  s.getValue().bindings != null &&
+                s.getValue().bindings.kafka != null))
+            .map(s -> s.servers.values())
+            .flatMap(Collection::stream)
+            .filter(s -> s.bindings.kafka != null)
+            .findFirst();
+        final boolean injectCatalog = asyncapis.stream().anyMatch(AsyncapiNamespaceGenerator::hasSchemas);
+        if (server.isPresent())
+        {
+            AsyncapiKafkaServerBindings kafka = server.get().bindings.kafka;
+            namespace
+                .catalog()
+                    .name(CATALOG_NAME)
+                    .type(KARAPACE_CATALOG_TYPE)
+                    .options(KarapaceOptionsConfig::builder)
+                        .url(kafka.schemaRegistryUrl)
+                        .context("default")
+                        .maxAge(Duration.ofHours(1))
+                        .build()
+                    .build();
+        }
+        else if (injectCatalog)
         {
             namespace
                 .catalog()
-                    .name(INLINE_CATALOG_NAME)
+                    .name(CATALOG_NAME)
                     .type(INLINE_CATALOG_TYPE)
                     .options(InlineOptionsConfig::builder)
                         .subjects()
-                            .inject(this::injectSubjects)
+                            .inject(s -> injectSubjects(s, asyncapis))
                             .build()
                         .build()
                     .build();
@@ -197,71 +263,90 @@ public abstract class AsyncapiNamespaceGenerator
     }
 
     protected <C> InlineSchemaConfigBuilder<C> injectSubjects(
-        InlineSchemaConfigBuilder<C> subjects)
+        InlineSchemaConfigBuilder<C> subjects,
+        List<Asyncapi> asyncapis)
     {
-        try (Jsonb jsonb = JsonbBuilder.create())
+        for (Asyncapi asyncapi : asyncapis)
         {
-            YAMLMapper yaml = YAMLMapper.builder()
-                .disable(WRITE_DOC_START_MARKER)
-                .enable(MINIMIZE_QUOTES)
-                .build();
-            for (Map.Entry<String, AsyncapiSchema> entry : asyncapi.components.schemas.entrySet())
+            if (hasSchemas(asyncapi))
             {
-                AsyncapiSchemaView schema = AsyncapiSchemaView.of(asyncapi.components.schemas, entry.getValue());
-
-                subjects
-                    .subject(entry.getKey())
-                    .version(VERSION_LATEST)
-                    .schema(writeSchemaYaml(jsonb, yaml, schema))
-                    .build();
-            }
-            if (asyncapi.components.messageTraits != null)
-            {
-                for (Map.Entry<String, AsyncapiTrait> entry : asyncapi.components.messageTraits.entrySet())
+                try (Jsonb jsonb = JsonbBuilder.create())
                 {
-                    entry.getValue().headers.properties.forEach((k, v) ->
+                    for (Map.Entry<String, AsyncapiSchemaItem> entry : asyncapi.components.schemas.entrySet())
+                    {
+                        AsyncapiSchemaView schema = AsyncapiSchemaView.of(asyncapi.components.schemas, entry.getValue());
+
                         subjects
-                            .subject(k)
+                            .subject(entry.getKey())
                             .version(VERSION_LATEST)
-                            .schema(writeSchemaYaml(jsonb, yaml, v))
-                            .build());
+                            .schema(writeSchemaJson(jsonb, schema))
+                            .build();
+                    }
+                    if (asyncapi.components.messageTraits != null)
+                    {
+                        for (Map.Entry<String, AsyncapiTrait> entry : asyncapi.components.messageTraits.entrySet())
+                        {
+                            entry.getValue().headers.properties.forEach((k, v) ->
+                                subjects
+                                    .subject(k)
+                                    .version(VERSION_LATEST)
+                                    .schema(writeSchemaJson(jsonb, v))
+                                    .build());
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    rethrowUnchecked(ex);
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            rethrowUnchecked(ex);
         }
         return subjects;
     }
 
-    protected static String writeSchemaYaml(
+    private static boolean hasSchemas(
+        Asyncapi asyncapi)
+    {
+        return asyncapi.components != null &&
+            asyncapi.components.schemas != null &&
+            !asyncapi.components.schemas.isEmpty();
+    }
+
+    protected static String writeSchemaJson(
         Jsonb jsonb,
-        YAMLMapper yaml,
         Object schema)
     {
-        String result = null;
-        try
+        String schemaJson = jsonb.toJson(schema);
+
+        JsonReader reader = Json.createReader(new StringReader(schemaJson));
+        JsonValue jsonValue = reader.readValue();
+
+        if (jsonValue instanceof JsonObject)
         {
-            String schemaJson = jsonb.toJson(schema);
-            JsonNode json = new ObjectMapper().readTree(schemaJson);
-            result = yaml.writeValueAsString(json);
+            JsonObject jsonObject = (JsonObject) jsonValue;
+
+            if (jsonObject.containsKey("schema"))
+            {
+                JsonValue modifiedJsonValue = jsonObject.get("schema");
+                StringWriter stringWriter = new StringWriter();
+                JsonWriter jsonWriter = Json.createWriter(stringWriter);
+                jsonWriter.write(modifiedJsonValue);
+                jsonWriter.close();
+
+                schemaJson = stringWriter.toString();
+            }
         }
-        catch (JsonProcessingException ex)
-        {
-            rethrowUnchecked(ex);
-        }
-        return result;
+
+        return schemaJson;
     }
 
     protected  <C> BindingConfigBuilder<C> injectMetrics(
         BindingConfigBuilder<C> binding,
-        List<MetricRefConfig> metricRefs,
-        String protocol)
+        List<MetricRefConfig> metricRefs)
     {
         List<MetricRefConfig> metrics = metricRefs.stream()
             .filter(m -> m.name.startsWith("stream."))
-            .collect(toList());
+            .toList();
 
         if (!metrics.isEmpty())
         {

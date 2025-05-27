@@ -28,8 +28,10 @@ import org.junit.Test;
 import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
 import io.aklivity.zilla.runtime.engine.config.CatalogConfig;
+import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
 import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
 import io.aklivity.zilla.runtime.engine.test.internal.catalog.TestCatalogHandler;
+import io.aklivity.zilla.runtime.engine.test.internal.catalog.config.TestCatalogConfig;
 import io.aklivity.zilla.runtime.engine.test.internal.catalog.config.TestCatalogOptionsConfig;
 import io.aklivity.zilla.runtime.model.avro.config.AvroModelConfig;
 
@@ -39,16 +41,26 @@ public class AvroModelTest
             "{\"name\":\"status\",\"type\":\"string\"}]," +
             "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
 
-    private final AvroModelConfig avroConfig = AvroModelConfig.builder()
-            .catalog()
-                .name("test0")
-                    .schema()
-                        .strategy("topic")
-                        .version("latest")
-                        .subject("test-value")
-                        .build()
-                .build()
-            .build();
+    private static final String SCHEMA_OBJECT = "{\"type\":\"record\",\"name\":\"ExampleRecord\"," +
+        "\"namespace\":\"com.example\"," +
+        "\"fields\":[" +
+        "{\"name\":\"bytesField\",\"type\":\"bytes\"}," +
+        "{\"name\":\"stringField\",\"type\":\"string\"}," +
+        "{\"name\":\"intField\",\"type\":\"int\"}," +
+        "{\"name\":\"floatField\",\"type\":\"float\"}," +
+        "{\"name\":\"longField\",\"type\":\"long\"}," +
+        "{\"name\":\"doubleField\",\"type\":\"double\"}]}";
+
+    private static final String COMPLEX_SCHEMA = "{\"type\":\"record\",\"name\":\"example\",\"namespace\":\"com.example\"," +
+        "\"fields\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"preferences\",\"" +
+        "type\":{\"type\":\"map\",\"values\":\"string\"}},{\"name\":\"attributes\",\"" +
+        "type\":{\"type\":\"map\",\"values\":{\"type\":\"record\",\"name\":\"Attribute\"," +
+        "\"fields\":[{\"name\":\"value\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"long\"}]}}}," +
+        "{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Address\"," +
+        "\"fields\":[{\"name\":\"street\",\"type\":\"string\"},{\"name\":\"city\",\"type\":\"string\"}," +
+        "{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"zip\",\"type\":\"string\"}]}}}," +
+        "{\"name\":\"source\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+
     private EngineContext context;
 
     @Before
@@ -60,13 +72,28 @@ public class AvroModelTest
     @Test
     public void shouldVerifyValidAvroEvent()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(9)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
-        AvroReadConverterHandler converter = new AvroReadConverterHandler(avroConfig, context);
+        AvroModelConfig model = AvroModelConfig.builder()
+            .catalog()
+                .name("test0")
+                    .schema()
+                        .strategy("topic")
+                        .version("latest")
+                        .subject("test-value")
+                        .build()
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(model, context);
 
         DirectBuffer data = new UnsafeBuffer();
 
@@ -79,13 +106,28 @@ public class AvroModelTest
     @Test
     public void shouldWriteValidAvroEvent()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(1)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
-        AvroWriteConverterHandler converter = new AvroWriteConverterHandler(avroConfig, context);
+        AvroModelConfig model = AvroModelConfig.builder()
+            .catalog()
+                .name("test0")
+                    .schema()
+                        .strategy("topic")
+                        .version("latest")
+                        .subject("test-value")
+                        .build()
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroWriteConverterHandler converter = new AvroWriteConverterHandler(model, context);
 
         DirectBuffer data = new UnsafeBuffer();
 
@@ -98,15 +140,30 @@ public class AvroModelTest
     @Test
     public void shouldVerifyInvalidAvroEvent()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(9)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
+        AvroModelConfig model = AvroModelConfig.builder()
+            .catalog()
+                .name("test0")
+                    .schema()
+                        .strategy("topic")
+                        .version("latest")
+                        .subject("test-value")
+                        .build()
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
         when(context.clock()).thenReturn(Clock.systemUTC());
         when(context.supplyEventWriter()).thenReturn(mock(MessageConsumer.class));
-        AvroReadConverterHandler converter = new AvroReadConverterHandler(avroConfig, context);
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(model, context);
 
         DirectBuffer data = new UnsafeBuffer();
 
@@ -118,24 +175,29 @@ public class AvroModelTest
     @Test
     public void shouldReadAvroEventExpectJson()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(9)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
-        AvroModelConfig config = AvroModelConfig.builder()
-                .view("json")
-                .catalog()
-                    .name("test0")
-                        .schema()
-                        .strategy("topic")
-                        .version("latest")
-                        .subject("test-value")
-                        .build()
+        AvroModelConfig model = AvroModelConfig.builder()
+            .view("json")
+            .catalog()
+                .name("test0")
+                    .schema()
+                    .strategy("topic")
+                    .version("latest")
+                    .subject("test-value")
                     .build()
-                .build();
-        AvroReadConverterHandler converter = new AvroReadConverterHandler(config, context);
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(model, context);
 
         DirectBuffer data = new UnsafeBuffer();
 
@@ -161,24 +223,29 @@ public class AvroModelTest
     @Test
     public void shouldWriteJsonEventExpectAvro()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(9)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
-        AvroModelConfig config = AvroModelConfig.builder()
-                .view("json")
-                .catalog()
-                    .name("test0")
-                        .schema()
-                        .strategy("topic")
-                        .version("latest")
-                        .subject("test-value")
-                        .build()
+        AvroModelConfig model = AvroModelConfig.builder()
+            .view("json")
+            .catalog()
+                .name("test0")
+                    .schema()
+                    .strategy("topic")
+                    .version("latest")
+                    .subject("test-value")
                     .build()
-                .build();
-        AvroWriteConverterHandler converter = new AvroWriteConverterHandler(config, context);
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroWriteConverterHandler converter = new AvroWriteConverterHandler(model, context);
 
         DirectBuffer expected = new UnsafeBuffer();
 
@@ -203,24 +270,29 @@ public class AvroModelTest
     @Test
     public void shouldVerifyPaddingLength()
     {
-        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
-            .id(9)
-            .schema(SCHEMA)
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(COMPLEX_SCHEMA)
+                .build()
             .build();
-        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
-        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
-        AvroModelConfig config = AvroModelConfig.builder()
-                .view("json")
-                .catalog()
-                    .name("test0")
-                    .schema()
-                        .strategy("topic")
-                        .version("latest")
-                        .subject("test-value")
-                        .build()
+        AvroModelConfig model = AvroModelConfig.builder()
+            .view("json")
+            .catalog()
+                .name("test0")
+                .schema()
+                    .strategy("topic")
+                    .version("latest")
+                    .subject("test-value")
                     .build()
-                .build();
-        AvroReadConverterHandler converter = new AvroReadConverterHandler(config, context);
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(model, context);
 
         DirectBuffer data = new UnsafeBuffer();
 
@@ -228,7 +300,79 @@ public class AvroModelTest
             0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
         data.wrap(bytes, 0, bytes.length);
 
-        assertEquals(22, converter.padding(data, 0, data.capacity()));
+        assertEquals(292, converter.padding(data, 0, data.capacity()));
+    }
 
+    @Test
+    public void shouldExtract()
+    {
+        TestCatalogConfig catalog = CatalogConfig.builder(TestCatalogConfig::new)
+            .namespace("test")
+            .name("test0")
+            .type("test")
+            .options(TestCatalogOptionsConfig::builder)
+                .id(9)
+                .schema(SCHEMA_OBJECT)
+                .build()
+            .build();
+        AvroModelConfig model = AvroModelConfig.builder()
+            .catalog()
+                .name("test0")
+                    .schema()
+                        .strategy("topic")
+                        .version("latest")
+                        .subject("test-value")
+                        .build()
+                .build()
+            .build();
+
+        when(context.supplyCatalog(catalog.id)).thenReturn(new TestCatalogHandler(catalog.options));
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(model, context);
+
+        String stringPath = "$.stringField";
+        converter.extract(stringPath);
+
+        String intPath = "$.intField";
+        converter.extract(intPath);
+
+        String floatPath = "$.floatField";
+        converter.extract(floatPath);
+
+        String longPath = "$.longField";
+        converter.extract(longPath);
+
+        String doublePath = "$.doubleField";
+        converter.extract(doublePath);
+
+        DirectBuffer data = new UnsafeBuffer();
+
+        byte[] bytes = {0, 16, 112, 111, 115, 105, 116, 105, 118, 101, 2, -51, -52, 12, 64, 2, 51, 51, 51, 51, 51, 51, -13, 63};
+        data.wrap(bytes, 0, bytes.length);
+        assertEquals(data.capacity(), converter.convert(0L, 0L, data, 0, data.capacity(), ValueConsumer.NOP));
+
+        assertEquals(8, converter.extractedLength(stringPath));
+        ConverterHandler.FieldVisitor visitor = (buffer, index, length) ->
+        {
+            assertEquals("positive", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(stringPath, visitor);
+
+        ConverterHandler.FieldVisitor doubleVisitor = (buffer, index, length) ->
+        {
+            assertEquals("1.2", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(doublePath, doubleVisitor);
+
+        ConverterHandler.FieldVisitor intVisitor = (buffer, index, length) ->
+        {
+            assertEquals("1", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(intPath, intVisitor);
+
+        ConverterHandler.FieldVisitor floatVisitor = (buffer, index, length) ->
+        {
+            assertEquals("2.2", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(floatPath, floatVisitor);
     }
 }

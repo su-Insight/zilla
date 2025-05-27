@@ -43,8 +43,8 @@ import io.aklivity.zilla.runtime.binding.kafka.config.KafkaSaslConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaServerConfig;
 import io.aklivity.zilla.runtime.binding.kafka.identity.KafkaClientIdSupplier;
 import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaConfiguration;
-import io.aklivity.zilla.runtime.binding.kafka.internal.KafkaEventContext;
 import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaScramMechanism;
+import io.aklivity.zilla.runtime.binding.kafka.internal.events.KafkaEventContext;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.String16FW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.RequestHeaderFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.codec.ResponseHeaderFW;
@@ -65,6 +65,7 @@ public abstract class KafkaClientSaslHandshaker
     private static final short SASL_AUTHENTICATE_API_VERSION = 1;
     private static final int ERROR_SASL_AUTHENTICATION_FAILED = 58;
     private static final int ERROR_NONE = 0;
+    private static final int ERROR_CLUSTER_AUTHORIZATION_FAILED = 31;
     private static final int ERROR_UNSUPPORTED_VERSION = 35;
 
     private static final String CLIENT_KEY = "Client Key";
@@ -434,9 +435,10 @@ public abstract class KafkaClientSaslHandshaker
             int apiVersion,
             int errorCode)
         {
-            if (errorCode == ERROR_UNSUPPORTED_VERSION)
+            switch (errorCode)
             {
-                event.apiVersionRejected(traceId, bindingId, apiKey, apiVersion);
+            case ERROR_CLUSTER_AUTHORIZATION_FAILED -> event.clusterAuthorizationFailed(traceId, bindingId, apiKey, apiVersion);
+            case ERROR_UNSUPPORTED_VERSION -> event.apiVersionRejected(traceId, bindingId, apiKey, apiVersion);
             }
         }
 
