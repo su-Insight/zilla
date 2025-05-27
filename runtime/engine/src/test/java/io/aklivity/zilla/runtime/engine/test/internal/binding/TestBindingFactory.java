@@ -15,8 +15,11 @@
  */
 package io.aklivity.zilla.runtime.engine.test.internal.binding;
 
+import static io.aklivity.zilla.runtime.engine.test.internal.binding.config.TestBindingOptionsConfigAdapter.DEFAULT_ASSERTION_SCHEMA;
+
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -27,10 +30,16 @@ import io.aklivity.zilla.runtime.engine.binding.BindingHandler;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
 import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
+import io.aklivity.zilla.runtime.engine.config.CatalogedConfig;
 import io.aklivity.zilla.runtime.engine.config.RouteConfig;
+import io.aklivity.zilla.runtime.engine.config.SchemaConfig;
 import io.aklivity.zilla.runtime.engine.guard.GuardHandler;
+import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
+import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
 import io.aklivity.zilla.runtime.engine.namespace.NamespacedId;
 import io.aklivity.zilla.runtime.engine.test.internal.binding.config.TestBindingOptionsConfig;
+import io.aklivity.zilla.runtime.engine.test.internal.binding.config.TestBindingOptionsConfig.CatalogAssertion;
+import io.aklivity.zilla.runtime.engine.test.internal.binding.config.TestBindingOptionsConfig.Event;
 import io.aklivity.zilla.runtime.engine.test.internal.event.TestEventContext;
 import io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.OctetsFW;
 import io.aklivity.zilla.runtime.engine.test.internal.k3po.ext.types.stream.AbortFW;
@@ -72,10 +81,13 @@ final class TestBindingFactory implements BindingHandler
     private final Long2LongHashMap router;
     private final TestEventContext event;
 
+    private ConverterHandler valueType;
     private List<CatalogHandler> catalogs;
+    private SchemaConfig catalog;
+    private List<CatalogAssertion> catalogAssertions;
     private GuardHandler guard;
     private String credentials;
-    private List<TestBindingOptionsConfig.Event> events;
+    private List<Event> events;
     private int eventIndex;
 
     TestBindingFactory(
@@ -102,16 +114,26 @@ final class TestBindingFactory implements BindingHandler
         TestBindingOptionsConfig options = (TestBindingOptionsConfig) binding.options;
         if (options != null)
         {
-            if (options.catalogs != null)
+            if (options.value != null)
             {
+                this.valueType = context.supplyWriteConverter(options.value);
+            }
+
+            if (options.cataloged != null)
+            {
+                this.catalog = options.cataloged.size() != 0 ? options.cataloged.get(0).schemas.get(0) : null;
                 this.catalogs = new LinkedList<>();
-                for (String catalog : options.catalogs)
+                for (CatalogedConfig catalog : options.cataloged)
                 {
                     int namespaceId = context.supplyTypeId(binding.namespace);
-                    int catalogId = context.supplyTypeId(catalog);
-                    catalogs.add(context.supplyCatalog(NamespacedId.id(namespaceId, catalogId)));
+                    int catalogId = context.supplyTypeId(catalog.name);
+                    final CatalogHandler handler = context.supplyCatalog(NamespacedId.id(namespaceId, catalogId));
+                    catalogs.add(handler);
                 }
+                this.catalogAssertions = options.catalogAssertions != null && !options.catalogAssertions.isEmpty() ?
+                    options.catalogAssertions.get(0).assertions : null;
             }
+
             if (options.authorization != null)
             {
                 int namespaceId = context.supplyTypeId(binding.namespace);
@@ -119,6 +141,7 @@ final class TestBindingFactory implements BindingHandler
                 this.guard = context.supplyGuard(NamespacedId.id(namespaceId, guardId));
                 this.credentials = options.authorization.credentials;
             }
+
             this.events = options.events;
         }
     }
@@ -246,9 +269,59 @@ final class TestBindingFactory implements BindingHandler
 
             if (catalogs != null)
             {
-                for (CatalogHandler catalog : catalogs)
+                CatalogHandler handler = catalogs.get(0);
+                if (catalogAssertions != null && !catalogAssertions.isEmpty())
                 {
-                    catalog.resolve(0);
+                    for (CatalogAssertion assertion : catalogAssertions)
+                    {
+                        try
+                        {
+                            Thread.sleep(assertion.delay);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new RuntimeException(ex);
+                        }
+                        if (catalog.subject != null && catalog.version != null)
+                        {
+                            int id = handler.resolve(catalog.subject, catalog.version);
+                            if (id != assertion.id)
+                            {
+                                doInitialReset(traceId);
+                            }
+                            if (DEFAULT_ASSERTION_SCHEMA != assertion.schema)
+                            {
+                                String schema = handler.resolve(id);
+                                if (!Objects.equals(assertion.schema, schema))
+                                {
+                                    doInitialReset(traceId);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            String schema = handler.resolve(catalog.id);
+                            if (assertion.schema == null && schema != null)
+                            {
+                                doInitialReset(traceId);
+                            }
+                            else if (assertion.schema != null && !assertion.schema.equals(schema))
+                            {
+                                doInitialReset(traceId);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (catalog.subject != null && catalog.version != null)
+                    {
+                        handler.resolve(catalog.subject, catalog.version);
+                    }
+                    else
+                    {
+                        handler.resolve(catalog.id);
+                    }
                 }
             }
             if (guard != null)
@@ -257,7 +330,7 @@ final class TestBindingFactory implements BindingHandler
             }
             while (events != null && eventIndex < events.size())
             {
-                TestBindingOptionsConfig.Event e = events.get(eventIndex);
+                Event e = events.get(eventIndex);
                 event.connected(traceId, routedId, e.timestamp, e.message);
                 eventIndex++;
             }
@@ -274,7 +347,16 @@ final class TestBindingFactory implements BindingHandler
 
             initialSeq = sequence + reserved;
 
-            target.doInitialData(traceId, flags, reserved, payload);
+            if (valueType != null &&
+                valueType.convert(traceId, routedId, payload.buffer(), payload.offset(), payload.sizeof(),
+                        ValueConsumer.NOP) < 0)
+            {
+                target.doInitialAbort(traceId);
+            }
+            else
+            {
+                target.doInitialData(traceId, flags, reserved, payload);
+            }
         }
 
         private void onInitialEnd(

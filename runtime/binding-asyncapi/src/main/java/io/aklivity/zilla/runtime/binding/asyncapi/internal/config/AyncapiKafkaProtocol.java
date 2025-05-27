@@ -14,6 +14,7 @@
  */
 package io.aklivity.zilla.runtime.binding.asyncapi.internal.config;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -25,7 +26,6 @@ import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiMessage
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiOperation;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiChannelView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiMessageView;
-import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiSchemaView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaOptionsConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaOptionsConfigBuilder;
@@ -34,11 +34,9 @@ import io.aklivity.zilla.runtime.binding.kafka.config.KafkaServerConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaTopicConfig;
 import io.aklivity.zilla.runtime.binding.kafka.config.KafkaTopicConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
-import io.aklivity.zilla.runtime.engine.config.CatalogedConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.KindConfig;
 import io.aklivity.zilla.runtime.engine.config.MetricRefConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfigBuilder;
-import io.aklivity.zilla.runtime.model.json.config.JsonModelConfig;
 
 public class AyncapiKafkaProtocol extends AsyncapiProtocol
 {
@@ -50,12 +48,12 @@ public class AyncapiKafkaProtocol extends AsyncapiProtocol
 
     public AyncapiKafkaProtocol(
         String qname,
-        Asyncapi asyncApi,
+        List<Asyncapi> asyncapis,
         List<AsyncapiServerView> servers,
         AsyncapiOptionsConfig options,
         String protocol)
     {
-        super(qname, asyncApi, protocol, SCHEME);
+        super(qname, asyncapis, protocol, SCHEME);
         this.servers = servers;
         this.sasl = options.kafka != null ? options.kafka.sasl : null;
     }
@@ -63,16 +61,18 @@ public class AyncapiKafkaProtocol extends AsyncapiProtocol
     @Override
     public <C> NamespaceConfigBuilder<C> injectProtocolClientCache(
         NamespaceConfigBuilder<C> namespace,
-        List<MetricRefConfig> metricRefs)
+        List<MetricRefConfig> metricRefs,
+        AsyncapiOptionsConfig options)
     {
+        final KafkaOptionsConfig kafka = options.kafka;
         return namespace
                 .binding()
                     .name("kafka_cache_client0")
                     .type("kafka")
                     .kind(KindConfig.CACHE_CLIENT)
-                    .inject(b -> this.injectMetrics(b, metricRefs, "kafka"))
+                    .inject(b -> this.injectMetrics(b, metricRefs))
                                         .options(KafkaOptionsConfig::builder)
-                                            .inject(this::injectKafkaTopicOptions)
+                                            .inject(optionBuilder -> this.injectKafkaTopicOptions(optionBuilder, kafka))
                                             .build()
                     .exit("kafka_cache_server0")
                 .build()
@@ -80,10 +80,10 @@ public class AyncapiKafkaProtocol extends AsyncapiProtocol
                     .name("kafka_cache_server0")
                     .type("kafka")
                     .kind(KindConfig.CACHE_SERVER)
-                    .inject(b -> this.injectMetrics(b, metricRefs, "kafka"))
+                    .inject(b -> this.injectMetrics(b, metricRefs))
                     .options(KafkaOptionsConfig::builder)
                         .inject(this::injectKafkaBootstrapOptions)
-                        .inject(this::injectKafkaTopicOptions)
+                        .inject(optionBuilder -> this.injectKafkaTopicOptions(optionBuilder, kafka))
                         .build()
                     .exit("kafka_client0")
                 .build();
@@ -143,23 +143,34 @@ public class AyncapiKafkaProtocol extends AsyncapiProtocol
     }
 
     private <C> KafkaOptionsConfigBuilder<C> injectKafkaTopicOptions(
-        KafkaOptionsConfigBuilder<C> options)
+        KafkaOptionsConfigBuilder<C> options,
+        KafkaOptionsConfig kafka)
     {
-        for (String name : asyncApi.operations.keySet())
+        for (Asyncapi asyncapi : asyncapis)
         {
-            AsyncapiOperation operation = asyncApi.operations.get(name);
-            AsyncapiChannelView channel = AsyncapiChannelView.of(asyncApi.channels, operation.channel);
-            String topic = channel.address();
-
-            if (channel.messages() != null && !channel.messages().isEmpty() ||
-                channel.parameters() != null && !channel.parameters().isEmpty())
+            for (String name : asyncapi.operations.keySet())
             {
-                options
-                    .topic(KafkaTopicConfig::builder)
-                        .name(topic)
-                        .inject(topicConfig -> injectValue(topicConfig, channel.messages()))
-                        .build()
-                    .build();
+                AsyncapiOperation operation = asyncapi.operations.get(name);
+                AsyncapiChannelView channel = AsyncapiChannelView.of(asyncapi.channels, operation.channel);
+                String topic = channel.address();
+
+                if (channel.messages() != null && !channel.messages().isEmpty() ||
+                    channel.parameters() != null && !channel.parameters().isEmpty())
+                {
+                    KafkaTopicConfig kafkaTopic = kafka != null && kafka.topics != null
+                        ? kafka.topics.stream()
+                            .filter(t -> t.name.equals(topic))
+                            .findFirst()
+                            .orElse(null)
+                        : null;
+                    options
+                        .topic(KafkaTopicConfig::builder)
+                            .name(topic)
+                            .inject(topicConfig -> injectHeader(topicConfig, kafkaTopic))
+                            .inject(topicConfig -> injectValue(topicConfig, asyncapi, channel.messages()))
+                            .build()
+                        .build();
+                }
             }
         }
         return options;
@@ -168,47 +179,45 @@ public class AyncapiKafkaProtocol extends AsyncapiProtocol
     private <C> KafkaOptionsConfigBuilder<C> injectKafkaBootstrapOptions(
         KafkaOptionsConfigBuilder<C> options)
     {
-        return options.bootstrap(asyncApi.channels.values().stream()
-            .filter(c -> !PARAMETERIZED_TOPIC_PATTERN.matcher(c.address).find())
-            .map(c -> AsyncapiChannelView.of(asyncApi.channels, c).address()).collect(Collectors.toList()));
+        List<String> bootstrap = new ArrayList<>();
+        for (Asyncapi asyncapi : asyncapis)
+        {
+            bootstrap.addAll(asyncapi.channels.values().stream()
+                .filter(c -> !PARAMETERIZED_TOPIC_PATTERN.matcher(c.address).find())
+                .map(c -> AsyncapiChannelView.of(asyncapi.channels, c).address()).collect(Collectors.toList()));
+        }
+        return options.bootstrap(bootstrap);
     }
 
-    private <C> KafkaTopicConfigBuilder<C> injectValue(
+    private <C> KafkaTopicConfigBuilder<C> injectHeader(
         KafkaTopicConfigBuilder<C> topic,
-        Map<String, AsyncapiMessage> messages)
+        KafkaTopicConfig kafkaTopic)
     {
-        if (messages != null)
+        if (kafkaTopic != null)
         {
-            if (hasJsonContentType())
-            {
-                topic
-                    .value(JsonModelConfig::builder)
-                        .catalog()
-                        .name(INLINE_CATALOG_NAME)
-                        .inject(catalog -> injectSchemas(catalog, messages))
-                        .build()
-                    .build();
-            }
+            kafkaTopic.headers.forEach(h -> topic.header(h.name.asString(), h.path));
+
         }
         return topic;
     }
 
-    private <C> CatalogedConfigBuilder<C> injectSchemas(
-        CatalogedConfigBuilder<C> catalog,
+    private <C> KafkaTopicConfigBuilder<C> injectValue(
+        KafkaTopicConfigBuilder<C> topic,
+        Asyncapi asyncapi,
         Map<String, AsyncapiMessage> messages)
     {
-        for (String name : messages.keySet())
+        if (messages != null)
         {
-            AsyncapiMessageView message = AsyncapiMessageView.of(asyncApi.components.messages, messages.get(name));
-            AsyncapiSchemaView payload = AsyncapiSchemaView.of(asyncApi.components.schemas, message.payload());
-            String subject = payload.refKey() != null ? payload.refKey() : name;
-            catalog
-                .schema()
-                    .subject(subject)
-                    .version(VERSION_LATEST)
-                    .build()
-                .build();
+            for (Map.Entry<String, AsyncapiMessage> messageEntry : messages.entrySet())
+            {
+                AsyncapiMessageView message =
+                    AsyncapiMessageView.of(asyncapi.components.messages, messageEntry.getValue());
+                if (message.payload() != null)
+                {
+                    topic.value(injectModel(asyncapi, message));
+                }
+            }
         }
-        return catalog;
+        return topic;
     }
 }

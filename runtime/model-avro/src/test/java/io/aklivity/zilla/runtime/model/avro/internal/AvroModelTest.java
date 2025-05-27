@@ -28,6 +28,7 @@ import org.junit.Test;
 import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
 import io.aklivity.zilla.runtime.engine.config.CatalogConfig;
+import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
 import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
 import io.aklivity.zilla.runtime.engine.test.internal.catalog.TestCatalogHandler;
 import io.aklivity.zilla.runtime.engine.test.internal.catalog.config.TestCatalogOptionsConfig;
@@ -38,6 +39,26 @@ public class AvroModelTest
     private static final String SCHEMA = "{\"fields\":[{\"name\":\"id\",\"type\":\"string\"}," +
             "{\"name\":\"status\",\"type\":\"string\"}]," +
             "\"name\":\"Event\",\"namespace\":\"io.aklivity.example\",\"type\":\"record\"}";
+
+    private static final String SCHEMA_OBJECT = "{\"type\":\"record\",\"name\":\"ExampleRecord\"," +
+        "\"namespace\":\"com.example\"," +
+        "\"fields\":[" +
+        "{\"name\":\"bytesField\",\"type\":\"bytes\"}," +
+        "{\"name\":\"stringField\",\"type\":\"string\"}," +
+        "{\"name\":\"intField\",\"type\":\"int\"}," +
+        "{\"name\":\"floatField\",\"type\":\"float\"}," +
+        "{\"name\":\"longField\",\"type\":\"long\"}," +
+        "{\"name\":\"doubleField\",\"type\":\"double\"}]}";
+
+    private static final String COMPLEX_SCHEMA = "{\"type\":\"record\",\"name\":\"example\",\"namespace\":\"com.example\"," +
+        "\"fields\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"preferences\",\"" +
+        "type\":{\"type\":\"map\",\"values\":\"string\"}},{\"name\":\"attributes\",\"" +
+        "type\":{\"type\":\"map\",\"values\":{\"type\":\"record\",\"name\":\"Attribute\"," +
+        "\"fields\":[{\"name\":\"value\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"long\"}]}}}," +
+        "{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Address\"," +
+        "\"fields\":[{\"name\":\"street\",\"type\":\"string\"},{\"name\":\"city\",\"type\":\"string\"}," +
+        "{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"zip\",\"type\":\"string\"}]}}}," +
+        "{\"name\":\"source\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
 
     private final AvroModelConfig avroConfig = AvroModelConfig.builder()
             .catalog()
@@ -205,7 +226,7 @@ public class AvroModelTest
     {
         TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
             .id(9)
-            .schema(SCHEMA)
+            .schema(COMPLEX_SCHEMA)
             .build();
         CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
         when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
@@ -228,7 +249,65 @@ public class AvroModelTest
             0x30, 0x10, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x76, 0x65};
         data.wrap(bytes, 0, bytes.length);
 
-        assertEquals(22, converter.padding(data, 0, data.capacity()));
+        assertEquals(260, converter.padding(data, 0, data.capacity()));
 
+    }
+
+    @Test
+    public void shouldExtract()
+    {
+        TestCatalogOptionsConfig testCatalogOptionsConfig = TestCatalogOptionsConfig.builder()
+            .id(9)
+            .schema(SCHEMA_OBJECT)
+            .build();
+        CatalogConfig catalogConfig = new CatalogConfig("test", "test0", "test", testCatalogOptionsConfig);
+        when(context.supplyCatalog(catalogConfig.id)).thenReturn(new TestCatalogHandler(testCatalogOptionsConfig));
+        AvroReadConverterHandler converter = new AvroReadConverterHandler(avroConfig, context);
+
+        String stringPath = "$.stringField";
+        converter.extract(stringPath);
+
+        String intPath = "$.intField";
+        converter.extract(intPath);
+
+        String floatPath = "$.floatField";
+        converter.extract(floatPath);
+
+        String longPath = "$.longField";
+        converter.extract(longPath);
+
+        String doublePath = "$.doubleField";
+        converter.extract(doublePath);
+
+        DirectBuffer data = new UnsafeBuffer();
+
+        byte[] bytes = {0, 16, 112, 111, 115, 105, 116, 105, 118, 101, 2, -51, -52, 12, 64, 2, 51, 51, 51, 51, 51, 51, -13, 63};
+        data.wrap(bytes, 0, bytes.length);
+        assertEquals(data.capacity(), converter.convert(0L, 0L, data, 0, data.capacity(), ValueConsumer.NOP));
+
+        assertEquals(8, converter.extractedLength(stringPath));
+        ConverterHandler.FieldVisitor visitor = (buffer, index, length) ->
+        {
+            assertEquals("positive", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(stringPath, visitor);
+
+        ConverterHandler.FieldVisitor doubleVisitor = (buffer, index, length) ->
+        {
+            assertEquals("1.2", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(doublePath, doubleVisitor);
+
+        ConverterHandler.FieldVisitor intVisitor = (buffer, index, length) ->
+        {
+            assertEquals("1", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(intPath, intVisitor);
+
+        ConverterHandler.FieldVisitor floatVisitor = (buffer, index, length) ->
+        {
+            assertEquals("2.2", buffer.getStringWithoutLengthUtf8(index, length));
+        };
+        converter.extracted(floatPath, floatVisitor);
     }
 }

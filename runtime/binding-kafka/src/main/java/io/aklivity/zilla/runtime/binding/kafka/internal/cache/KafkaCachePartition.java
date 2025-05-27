@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -56,6 +57,7 @@ import jakarta.json.spi.JsonProvider;
 
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
+import org.agrona.ExpandableDirectByteBuffer;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.MutableInteger;
@@ -63,6 +65,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.io.DirectBufferInputStream;
 import org.agrona.io.ExpandableDirectBufferOutputStream;
 
+import io.aklivity.zilla.runtime.binding.kafka.config.KafkaTopicHeaderType;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.Array32FW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.ArrayFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.Flyweight;
@@ -72,6 +75,7 @@ import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaHeaderFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaKeyFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaOffsetType;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.OctetsFW;
+import io.aklivity.zilla.runtime.binding.kafka.internal.types.String32FW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.Varint32FW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.cache.KafkaCacheDeltaFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.cache.KafkaCacheEntryFW;
@@ -117,8 +121,12 @@ public final class KafkaCachePartition
     private final MutableDirectBuffer entryInfo = new UnsafeBuffer(new byte[FIELD_OFFSET_KEY]);
     private final MutableDirectBuffer valueInfo = new UnsafeBuffer(new byte[Integer.BYTES]);
 
-    private final Varint32FW.Builder varIntRW = new Varint32FW.Builder().wrap(new UnsafeBuffer(new byte[5]), 0, 5);
+    private final Varint32FW varintRO = new Varint32FW();
+    private final Varint32FW.Builder varintRW = new Varint32FW.Builder().wrap(new UnsafeBuffer(new byte[5]), 0, 5);
     private final Array32FW<KafkaHeaderFW> headersRO = new Array32FW<KafkaHeaderFW>(new KafkaHeaderFW());
+    private final Array32FW.Builder<KafkaHeaderFW.Builder, KafkaHeaderFW> trailersRW =
+        new Array32FW.Builder<>(new KafkaHeaderFW.Builder(), new KafkaHeaderFW())
+            .wrap(new ExpandableDirectByteBuffer(512), 0, 8192);
 
     private final DirectBufferInputStream ancestorIn = new DirectBufferInputStream();
     private final DirectBufferInputStream headIn = new DirectBufferInputStream();
@@ -139,6 +147,7 @@ public final class KafkaCachePartition
 
     private KafkaCacheEntryFW ancestorEntry;
     private final AtomicLong produceCapacity;
+    private final OctetsFW octetsRO = new OctetsFW();
 
     public KafkaCachePartition(
         Path location,
@@ -347,15 +356,16 @@ public final class KafkaCachePartition
         KafkaDeltaType deltaType,
         ConverterHandler convertKey,
         ConverterHandler convertValue,
-        boolean verbose)
+        boolean verbose,
+        List<KafkaTopicHeaderType> headerTypes)
     {
         final long keyHash = computeHash(key);
         final int valueLength = value != null ? value.sizeof() : -1;
         writeEntryStart(context, traceId, bindingId, offset, entryMark, valueMark, timestamp, producerId, key,
             keyHash, valueLength, ancestor, entryFlags, deltaType, value, convertKey, convertValue, verbose);
-        writeEntryContinue(context, traceId, bindingId, FLAGS_COMPLETE, offset, entryMark, valueMark, value,
-            convertValue, verbose);
-        writeEntryFinish(headers, deltaType);
+        writeEntryContinue(value);
+        writeEntryFinish(headers, deltaType, context, traceId, bindingId, FLAGS_COMPLETE, offset, entryMark, valueMark,
+            convertValue, verbose, headerTypes);
     }
 
     public void writeEntryStart(
@@ -442,15 +452,28 @@ public final class KafkaCachePartition
         }
         else
         {
+            final int keyAt = logFile.capacity();
+            Varint32FW initLength = varintRW.set(0).build();
+            logFile.appendBytes(initLength);
+
             final ValueConsumer writeKey = (buffer, index, length) ->
             {
-                Varint32FW newLength = varIntRW.set(length).build();
-                logFile.appendBytes(newLength);
+                Varint32FW progress = logFile.readBytes(keyAt, varintRO::wrap);
+                Varint32FW newLength = varintRW.set(progress.value() + length).build();
+                int keyShift = newLength.sizeof() - progress.sizeof();
+                if (keyShift > 0)
+                {
+                    logFile.readBytes(progress.limit(), octetsRO::wrap);
+                    logFile.writeBytes(newLength.limit(), octetsRO);
+                }
+                logFile.writeBytes(keyAt, newLength);
                 logFile.appendBytes(buffer, index, length);
             };
+
             OctetsFW value = key.value();
-            int converted = convertKey.convert(traceId, bindingId, value.buffer(), value.offset(),
-                value.sizeof(), writeKey);
+            int converted = convertKey.convert(traceId, bindingId,
+                    value.buffer(), value.offset(), value.sizeof(), writeKey);
+
             if (converted == -1)
             {
                 logFile.writeInt(entryMark.value + FIELD_OFFSET_FLAGS, CACHE_ENTRY_FLAGS_ABORTED);
@@ -482,16 +505,7 @@ public final class KafkaCachePartition
     }
 
     public void writeEntryContinue(
-        EngineContext context,
-        long traceId,
-        long bindingId,
-        int flags,
-        long offset,
-        MutableInteger entryMark,
-        MutableInteger valueMark,
-        OctetsFW payload,
-        ConverterHandler convertValue,
-        boolean verbose)
+        OctetsFW payload)
     {
         final Node head = sentinel.previous;
         assert head != sentinel;
@@ -500,15 +514,49 @@ public final class KafkaCachePartition
         assert headSegment != null;
 
         final KafkaCacheFile logFile = headSegment.logFile();
-        final KafkaCacheFile convertedFile = headSegment.convertedFile();
 
         final int logAvailable = logFile.available();
         final int logRequired = payload.sizeof();
         assert logAvailable >= logRequired;
 
         logFile.appendBytes(payload.buffer(), payload.offset(), payload.sizeof());
+    }
 
-        if (payload != null && convertValue != ConverterHandler.NONE)
+    public void writeEntryFinish(
+        ArrayFW<KafkaHeaderFW> headers,
+        KafkaDeltaType deltaType,
+        EngineContext context,
+        long traceId,
+        long bindingId,
+        int flags,
+        long offset,
+        MutableInteger entryMark,
+        MutableInteger valueMark,
+        ConverterHandler convertValue,
+        boolean verbose,
+        List<KafkaTopicHeaderType> headerTypes)
+    {
+        final Node head = sentinel.previous;
+        assert head != sentinel;
+
+        final KafkaCacheSegment headSegment = head.segment;
+        assert headSegment != null;
+
+        final KafkaCacheFile logFile = headSegment.logFile();
+        final KafkaCacheFile deltaFile = headSegment.deltaFile();
+        final KafkaCacheFile hashFile = headSegment.hashFile();
+        final KafkaCacheFile indexFile = headSegment.indexFile();
+        final KafkaCacheFile convertedFile = headSegment.convertedFile();
+
+        final int valueLength = logFile.capacity() - valueMark.value;
+
+        final int logAvailable = logFile.available();
+        final int logRequired = headers.sizeof();
+        assert logAvailable >= logRequired : String.format("%s %d >= %d", headSegment, logAvailable, logRequired);
+
+        Array32FW<KafkaHeaderFW> trailers = EMPTY_TRAILERS;
+
+        if (valueLength != -1 && convertValue != ConverterHandler.NONE)
         {
             final ValueConsumer consumeConverted = (buffer, index, length) ->
             {
@@ -524,10 +572,9 @@ public final class KafkaCachePartition
                 convertedFile.writeInt(convertedValueLimit + length, convertedPadding - length);
             };
 
-            final int valueLength = logFile.capacity() - valueMark.value;
             int entryFlags = logFile.readInt(entryMark.value + FIELD_OFFSET_FLAGS);
 
-            if ((flags & FLAGS_FIN) != 0x00 && (entryFlags & CACHE_ENTRY_FLAGS_ABORTED) == 0x00)
+            if ((entryFlags & CACHE_ENTRY_FLAGS_ABORTED) == 0x00)
             {
                 int converted = convertValue.convert(traceId, bindingId, logFile.buffer(),
                     valueMark.value, valueLength, consumeConverted);
@@ -541,31 +588,29 @@ public final class KafkaCachePartition
                             context.supplyLocalName(bindingId), topic, id, offset);
                     }
                 }
+                else if (headerTypes != null && !headerTypes.isEmpty())
+                {
+                    Array32FW.Builder<KafkaHeaderFW.Builder, KafkaHeaderFW> builder =
+                        trailersRW.wrap(trailersRW.buffer(), 0, trailersRW.maxLimit());
+                    for (KafkaTopicHeaderType header : headerTypes)
+                    {
+                        String32FW name = header.name;
+                        String path = header.path;
+                        builder.item(h ->
+                        {
+                            h.nameLen(name.length())
+                                .name(name.value(), 0, name.length())
+                                .valueLen(convertValue.extractedLength(path));
+                            convertValue.extracted(path, h::value);
+                        });
+                    }
+                    trailers = builder.build();
+                }
             }
         }
-    }
-
-    public void writeEntryFinish(
-        ArrayFW<KafkaHeaderFW> headers,
-        KafkaDeltaType deltaType)
-    {
-        final Node head = sentinel.previous;
-        assert head != sentinel;
-
-        final KafkaCacheSegment headSegment = head.segment;
-        assert headSegment != null;
-
-        final KafkaCacheFile logFile = headSegment.logFile();
-        final KafkaCacheFile deltaFile = headSegment.deltaFile();
-        final KafkaCacheFile hashFile = headSegment.hashFile();
-        final KafkaCacheFile indexFile = headSegment.indexFile();
-
-        final int logAvailable = logFile.available();
-        final int logRequired = headers.sizeof();
-        assert logAvailable >= logRequired : String.format("%s %d >= %d", headSegment, logAvailable, logRequired);
 
         logFile.appendBytes(headers);
-        logFile.appendBytes(EMPTY_TRAILERS);
+        logFile.appendBytes(trailers);
         logFile.appendInt(0);
 
         final long offsetDelta = (int)(progress - headSegment.baseOffset());
@@ -580,6 +625,20 @@ public final class KafkaCachePartition
             headers.forEach(h ->
             {
                 final long hash = computeHash(h);
+                final long hashEntry = (hash << 32) | logFile.markValue();
+                hashFile.appendLong(hashEntry);
+            });
+        }
+
+        if (!trailers.isEmpty())
+        {
+            final DirectBuffer buffer = trailers.buffer();
+            final ByteBuffer byteBuffer = buffer.byteBuffer();
+            assert byteBuffer != null;
+            byteBuffer.clear();
+            trailers.forEach(t ->
+            {
+                final long hash = computeHash(t);
                 final long hashEntry = (hash << 32) | logFile.markValue();
                 hashFile.appendLong(hashEntry);
             });
@@ -702,15 +761,26 @@ public final class KafkaCachePartition
             }
             else
             {
+                final int keyAt = logFile.capacity();
+                Varint32FW initLength = varintRW.set(0).build();
+                logFile.appendBytes(initLength);
+
                 final ValueConsumer writeKey = (buffer, index, length) ->
                 {
-                    Varint32FW newLength = varIntRW.set(length).build();
-                    logFile.appendBytes(newLength);
+                    Varint32FW progress = logFile.readBytes(keyAt, varintRO::wrap);
+                    Varint32FW newLength = varintRW.set(progress.value() + length).build();
+                    int keyShift = newLength.sizeof() - progress.sizeof();
+                    if (keyShift > 0)
+                    {
+                        logFile.readBytes(progress.limit(), octetsRO::wrap);
+                        logFile.writeBytes(newLength.limit(), octetsRO);
+                    }
+                    logFile.writeBytes(keyAt, newLength);
                     logFile.appendBytes(buffer, index, length);
                 };
 
-                converted = convertKey.convert(traceId, bindingId, value.buffer(),
-                    value.offset(), value.sizeof(), writeKey);
+                converted = convertKey.convert(traceId, bindingId,
+                    value.buffer(), value.offset(), value.sizeof(), writeKey);
 
                 if (converted == -1)
                 {
