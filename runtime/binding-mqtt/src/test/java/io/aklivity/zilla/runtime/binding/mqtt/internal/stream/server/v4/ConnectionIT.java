@@ -29,9 +29,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
 
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 import io.aklivity.zilla.runtime.engine.test.EngineRule;
 import io.aklivity.zilla.runtime.engine.test.annotation.Configuration;
 import io.aklivity.zilla.runtime.engine.test.annotation.Configure;
@@ -64,6 +64,16 @@ public class ConnectionIT
         "${net}/connect.successful/client",
         "${app}/session.connect/server"})
     public void shouldConnect() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("server.log.event.yaml")
+    @Specification({
+        "${net}/connect.successful/client",
+        "${app}/session.connect/server"})
+    public void shouldConnectAndLog() throws Exception
     {
         k3po.finish();
     }
@@ -122,6 +132,15 @@ public class ConnectionIT
     @Specification({
         "${net}/connect.reject.missing.client.id/client"})
     public void shouldRejectMissingClientId() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("server.yaml")
+    @Specification({
+        "${net}/connect.reject.exceeding.max.client.id/client"})
+    public void shouldRejectExceedingClientIdMax() throws Exception
     {
         k3po.finish();
     }

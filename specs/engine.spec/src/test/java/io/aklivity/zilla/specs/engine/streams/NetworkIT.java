@@ -23,8 +23,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
+
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 
 public class NetworkIT
 {
@@ -125,16 +126,6 @@ public class NetworkIT
         "${net}/reconfigure.server.error.via.http/client"
     })
     public void shouldNotReconfigureWhen500Returned() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${net}/event/server",
-        "${net}/event/client"
-    })
-    public void shouldConnect() throws Exception
     {
         k3po.finish();
     }

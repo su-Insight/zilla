@@ -25,9 +25,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
 
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 import io.aklivity.zilla.runtime.engine.test.EngineRule;
 import io.aklivity.zilla.runtime.engine.test.annotation.Configuration;
 
@@ -57,6 +57,26 @@ public class ConnectionIT
         "${net}/client.sent.abort/server",
         "${app}/client.sent.abort/client"})
     public void shouldReceiveClientSentAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("client.credentials.username.yaml")
+    @Specification({
+        "${net}/connect.username.authentication.successful/server",
+        "${app}/session.connect.authorization/client"})
+    public void shouldAuthenticateUsernameAndConnect() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("client.credentials.password.yaml")
+    @Specification({
+        "${net}/connect.password.authentication.successful/server",
+        "${app}/session.connect.authorization/client"})
+    public void shouldAuthenticatePasswordAndConnect() throws Exception
     {
         k3po.finish();
     }

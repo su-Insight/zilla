@@ -177,6 +177,12 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
+      <artifactId>catalog-filesystem</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
       <artifactId>catalog-inline</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
@@ -190,12 +196,6 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>command-dump</artifactId>
-      <version>${project.version}</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>command-generate</artifactId>
       <version>${project.version}</version>
       <scope>runtime</scope>
     </dependency>

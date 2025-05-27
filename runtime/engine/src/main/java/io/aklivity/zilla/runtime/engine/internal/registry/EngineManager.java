@@ -253,6 +253,10 @@ public class EngineManager
         for (ExporterConfig exporter : namespace.telemetry.exporters)
         {
             exporter.id = resolver.resolve(exporter.name);
+            if (exporter.vault != null)
+            {
+                exporter.vaultId = resolver.resolve(exporter.vault);
+            }
         }
 
         for (BindingConfig binding : namespace.bindings)
@@ -417,20 +421,20 @@ public class EngineManager
     private final class NameResolver
     {
         private final int namespaceId;
-        private final Matcher matchName;
+        private final ThreadLocal<Matcher> matchName;
 
         private NameResolver(
             int namespaceId)
         {
             this.namespaceId = namespaceId;
-            this.matchName = NamespaceAdapter.PATTERN_NAME.matcher("");
+            this.matchName = ThreadLocal.withInitial(() -> NamespaceAdapter.PATTERN_NAME.matcher(""));
         }
 
         private long resolve(
             String name)
         {
             long id = 0L;
-
+            Matcher matchName = this.matchName.get();
             if (name != null && matchName.reset(name).matches())
             {
                 String ns = matchName.group("namespace");
@@ -441,7 +445,6 @@ public class EngineManager
 
                 id = NamespacedId.id(nsid, nid);
             }
-
             return id;
         }
 

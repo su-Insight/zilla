@@ -19,14 +19,16 @@ import org.agrona.DirectBuffer;
 import io.aklivity.zilla.runtime.catalog.karapace.internal.types.StringFW;
 import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.EventFW;
 import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceEventExFW;
-import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceRemoteAccessRejectedExFW;
+import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceRetrievedSchemaIdExFW;
+import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceRetrievedSchemaSubjectVersionExFW;
+import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceUnretrievableSchemaIdExFW;
+import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceUnretrievableSchemaSubjectVersionExFW;
+import io.aklivity.zilla.runtime.catalog.karapace.internal.types.event.KarapaceUnretrievableSchemaSubjectVersionStaleSchemaExFW;
 import io.aklivity.zilla.runtime.engine.Configuration;
 import io.aklivity.zilla.runtime.engine.event.EventFormatterSpi;
 
 public final class KarapaceEventFormatter implements EventFormatterSpi
 {
-    private static final String REMOTE_ACCESS_REJECTED = "REMOTE_ACCESS_REJECTED %s %s %d";
-
     private final EventFW eventRO = new EventFW();
     private final KarapaceEventExFW karapaceEventExRO = new KarapaceEventExFW();
 
@@ -46,11 +48,47 @@ public final class KarapaceEventFormatter implements EventFormatterSpi
         String result = null;
         switch (extension.kind())
         {
-        case REMOTE_ACCESS_REJECTED:
+        case UNRETRIEVABLE_SCHEMA_SUBJECT_VERSION:
         {
-            KarapaceRemoteAccessRejectedExFW ex = extension.remoteAccessRejected();
-            result = String.format(REMOTE_ACCESS_REJECTED, asString(ex.method()), asString(ex.url()),
-                ex.status());
+            KarapaceUnretrievableSchemaSubjectVersionExFW ex = extension.unretrievableSchemaSubjectVersion();
+            result = String.format(
+                    "Unable to fetch schema for subject %s with version %s.",
+                    asString(ex.subject()),
+                    asString(ex.version())
+            );
+            break;
+        }
+        case UNRETRIEVABLE_SCHEMA_SUBJECT_VERSION_STALE_SCHEMA:
+        {
+            KarapaceUnretrievableSchemaSubjectVersionStaleSchemaExFW ex = extension
+                .unretrievableSchemaSubjectVersionStaleSchema();
+            result = String.format(
+                    "Unable to fetch schema for subject %s with version %s; using stale schema with id %d.",
+                    asString(ex.subject()),
+                    asString(ex.version()),
+                    ex.schemaId()
+            );
+            break;
+        }
+        case UNRETRIEVABLE_SCHEMA_ID:
+        {
+            KarapaceUnretrievableSchemaIdExFW ex = extension.unretrievableSchemaId();
+            result = String.format("Unable to fetch schema id %d.", ex.schemaId());
+            break;
+        }
+        case RETRIEVED_SCHEMA_SUBJECT_VERSION:
+        {
+            KarapaceRetrievedSchemaSubjectVersionExFW ex = extension.retrievedSchemaSubjectVersion();
+            result = String.format("Successfully fetched schema for subject %s with version %s.",
+                    asString(ex.subject()),
+                    asString(ex.version())
+            );
+            break;
+        }
+        case RETRIEVED_SCHEMA_ID:
+        {
+            KarapaceRetrievedSchemaIdExFW ex = extension.retrievedSchemaId();
+            result = String.format("Successfully fetched schema id %d.", ex.schemaId());
             break;
         }
         }

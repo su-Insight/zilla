@@ -22,8 +22,9 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.Specification;
-import org.kaazing.k3po.junit.rules.K3poRule;
+
+import io.aklivity.k3po.runtime.junit.annotation.Specification;
+import io.aklivity.k3po.runtime.junit.rules.K3poRule;
 
 public class KafkaIT
 {
@@ -136,6 +137,15 @@ public class KafkaIT
 
     @Test
     @Specification({
+        "${kafka}/publish.one.message.resolve.topic.params/client",
+        "${kafka}/publish.one.message.resolve.topic.params/server"})
+    public void shouldSendOneMessageWithResolvingParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${kafka}/publish.10k/client",
         "${kafka}/publish.10k/server"})
     public void shouldSendMessage10k() throws Exception
@@ -184,6 +194,24 @@ public class KafkaIT
         "${kafka}/publish.topic.space/client",
         "${kafka}/publish.topic.space/server"})
     public void shouldSendUsingTopicSpace() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.topic.space.with.params/client",
+        "${kafka}/publish.topic.space.with.params/server"})
+    public void shouldSendUsingTopicSpaceWithParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.reject.qos2/client",
+        "${kafka}/publish.reject.qos2/server"})
+    public void shouldRejectPublishWhenTopicSpaceWithParams() throws Exception
     {
         k3po.finish();
     }
@@ -355,6 +383,15 @@ public class KafkaIT
         "${kafka}/subscribe.one.message.changed.topic.name/client",
         "${kafka}/subscribe.one.message.changed.topic.name/server"})
     public void shouldReceiveOneMessageWithChangedTopicName() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/subscribe.one.message.resolve.topic.params/client",
+        "${kafka}/subscribe.one.message.resolve.topic.params/server"})
+    public void shouldReceiveOneMessageWithResolvingParams() throws Exception
     {
         k3po.finish();
     }
@@ -598,6 +635,15 @@ public class KafkaIT
         "${kafka}/session.subscribe/client",
         "${kafka}/session.subscribe/server"})
     public void shouldSubscribeSaveSubscriptionsInSession() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/session.reject.non.compacted.sessions.topic/client",
+        "${kafka}/session.reject.non.compacted.sessions.topic/server"})
+    public void shouldRejectSessionNonCompactedSessionsTopic() throws Exception
     {
         k3po.finish();
     }
