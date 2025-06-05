@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        java: [ 22, 17 ]
+        java: [ 22 ]
 
     steps:
     - name: Checkout GitHub sources
