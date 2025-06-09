@@ -18,6 +18,7 @@ import static org.agrona.BitUtil.toHex;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Map;
 
 import org.agrona.DirectBuffer;
 import org.agrona.LangUtil;
@@ -27,30 +28,39 @@ import io.aklivity.zilla.runtime.binding.http.kafka.internal.types.String16FW;
 public class HttpKafkaWithProduceHash
 {
     private final String16FW correlationId;
-    private final byte[] hashBytesRW;
+    private final Map<byte[], Integer> inputs;
     private final MessageDigest md5;
 
     private byte[] digest;
 
     HttpKafkaWithProduceHash(
         String16FW correlationId,
-        byte[] hashBytesRW)
+        Map<byte[], Integer> inputs)
     {
         this.correlationId = correlationId;
-        this.hashBytesRW = hashBytesRW;
+        this.inputs = inputs;
         this.md5 = initMD5();
     }
 
     public void updateHash(
         DirectBuffer value)
     {
-        value.getBytes(0, hashBytesRW, 0, value.capacity());
-        md5.update(hashBytesRW, 0, value.capacity());
+        byte[] hashBytes = new byte[value.capacity()];
+        value.getBytes(0, hashBytes, 0, value.capacity());
+        inputs.compute(hashBytes, (k, v) -> (v == null) ? 1 : v + 1);
     }
 
     public void digestHash()
     {
+        for (Map.Entry<byte[], Integer> entry : inputs.entrySet())
+        {
+            for (int i = 0; i < entry.getValue(); i++)
+            {
+                md5.update(entry.getKey());
+            }
+        }
         digest = md5.digest();
+        inputs.clear();
     }
 
     public String16FW correlationId()
