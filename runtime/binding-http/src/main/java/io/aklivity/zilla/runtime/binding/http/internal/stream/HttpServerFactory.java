@@ -84,6 +84,7 @@ import io.aklivity.zilla.runtime.binding.http.config.HttpPolicyConfig;
 import io.aklivity.zilla.runtime.binding.http.config.HttpVersion;
 import io.aklivity.zilla.runtime.binding.http.internal.HttpBinding;
 import io.aklivity.zilla.runtime.binding.http.internal.HttpConfiguration;
+import io.aklivity.zilla.runtime.binding.http.internal.HttpEventContext;
 import io.aklivity.zilla.runtime.binding.http.internal.codec.Http2ContinuationFW;
 import io.aklivity.zilla.runtime.binding.http.internal.codec.Http2DataFW;
 import io.aklivity.zilla.runtime.binding.http.internal.codec.Http2ErrorCode;
@@ -544,6 +545,7 @@ public final class HttpServerFactory implements HttpStreamFactory
     private final Matcher connectionClose;
     private final int maximumHeadersSize;
     private final Long2ObjectHashMap<HttpBindingConfig> bindings;
+    private final HttpEventContext event;
 
     public HttpServerFactory(
         HttpConfiguration config,
@@ -576,6 +578,7 @@ public final class HttpServerFactory implements HttpStreamFactory
         this.supplyValidator = context::supplyValidator;
         this.encodeMax = bufferPool.slotCapacity();
         this.bindings = new Long2ObjectHashMap<>();
+        this.event = new HttpEventContext(context);
 
         this.headers200 = initHeaders(config, STATUS_200);
         this.headers204 = initHeaders(config, STATUS_204);
@@ -1043,7 +1046,7 @@ public final class HttpServerFactory implements HttpStreamFactory
                         final String credentialsMatch = server.credentials.apply(headers::get);
                         if (credentialsMatch != null)
                         {
-                            guard.reauthorize(server.initialId, credentialsMatch);
+                            guard.reauthorize(traceId, server.routedId, server.initialId, credentialsMatch);
                         }
                         server.doEncodeHeaders(traceId, authorization, budgetId, headers204);
                     }
@@ -1055,7 +1058,7 @@ public final class HttpServerFactory implements HttpStreamFactory
                             final String credentialsMatch = server.credentials.apply(headers::get);
                             if (credentialsMatch != null)
                             {
-                                exchangeAuth = guard.reauthorize(server.initialId, credentialsMatch);
+                                exchangeAuth = guard.reauthorize(traceId, server.routedId, server.initialId, credentialsMatch);
                             }
                         }
 
@@ -2257,6 +2260,8 @@ public final class HttpServerFactory implements HttpStreamFactory
             HttpBeginExFW beginEx,
             HttpRequestType requestType)
         {
+            event.requestAccepted(traceId, originId, guard, authorization, beginEx.headers());
+
             final HttpExchange exchange = new HttpExchange(originId, routedId, authorization,
                 traceId, policy, origin, requestType);
             boolean headersValid = exchange.validateHeaders(beginEx);
@@ -2293,7 +2298,7 @@ public final class HttpServerFactory implements HttpStreamFactory
             int limit,
             Flyweight extension)
         {
-            boolean contentValid = exchange.validateContent(buffer, 0, limit - offset);
+            boolean contentValid = exchange.validateContent(buffer, offset, limit - offset);
             int result;
             if (contentValid)
             {
@@ -4923,7 +4928,7 @@ public final class HttpServerFactory implements HttpStreamFactory
             else
             {
                 final Map<String, String> headers = headersDecoder.headers;
-
+                event.requestAccepted(traceId, routedId, guard, authorization, headers);
                 if (isCorsPreflightRequest(headers))
                 {
                     if (!endRequest)
@@ -4956,7 +4961,7 @@ public final class HttpServerFactory implements HttpStreamFactory
                         final String credentialsMatch = credentials.apply(headers::get);
                         if (credentialsMatch != null)
                         {
-                            guard.reauthorize(initialId, credentialsMatch);
+                            guard.reauthorize(traceId, routedId, initialId, credentialsMatch);
                         }
                         doEncodeHeaders(traceId, authorization, streamId, headers204, true);
                     }
@@ -4968,7 +4973,7 @@ public final class HttpServerFactory implements HttpStreamFactory
                             final String credentialsMatch = credentials.apply(headers::get);
                             if (credentialsMatch != null)
                             {
-                                exchangeAuth = guard.reauthorize(initialId, credentialsMatch);
+                                exchangeAuth = guard.reauthorize(traceId, routedId, initialId, credentialsMatch);
                             }
                         }
 
@@ -5342,7 +5347,7 @@ public final class HttpServerFactory implements HttpStreamFactory
                 final String credentialsMatch = credentials.apply(headers::get);
                 if (credentialsMatch != null)
                 {
-                    exchangeAuth = guard.reauthorize(initialId, credentialsMatch);
+                    exchangeAuth = guard.reauthorize(traceId, routedId, initialId, credentialsMatch);
                 }
             }
 

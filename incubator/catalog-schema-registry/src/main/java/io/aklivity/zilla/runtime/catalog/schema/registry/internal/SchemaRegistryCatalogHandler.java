@@ -30,6 +30,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import io.aklivity.zilla.runtime.catalog.schema.registry.internal.config.SchemaRegistryOptionsConfig;
 import io.aklivity.zilla.runtime.catalog.schema.registry.internal.serializer.RegisterSchemaRequest;
 import io.aklivity.zilla.runtime.catalog.schema.registry.internal.types.SchemaRegistryPrefixFW;
+import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
 import io.aklivity.zilla.runtime.engine.model.function.ValueConsumer;
 
@@ -51,9 +52,13 @@ public class SchemaRegistryCatalogHandler implements CatalogHandler
     private final Int2ObjectCache<String> schemas;
     private final Int2ObjectCache<CachedSchemaId> schemaIds;
     private final long maxAgeMillis;
+    private final SchemaRegistryEventContext event;
+    private final long catalogId;
 
     public SchemaRegistryCatalogHandler(
-        SchemaRegistryOptionsConfig config)
+        SchemaRegistryOptionsConfig config,
+        EngineContext context,
+        long catalogId)
     {
         this.baseUrl = config.url;
         this.client = HttpClient.newHttpClient();
@@ -62,34 +67,8 @@ public class SchemaRegistryCatalogHandler implements CatalogHandler
         this.schemas = new Int2ObjectCache<>(1, 1024, i -> {});
         this.schemaIds = new Int2ObjectCache<>(1, 1024, i -> {});
         this.maxAgeMillis = config.maxAge.toMillis();
-    }
-
-    @Override
-    public int register(
-        String subject,
-        String type,
-        String schema)
-    {
-        int schemaId = 0;
-        HttpRequest httpRequest = HttpRequest
-            .newBuilder(toURI(baseUrl, MessageFormat.format(REGISTER_SCHEMA_PATH, subject)))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(request.buildBody(type, schema)))
-            .build();
-        try
-        {
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            schemaId = response.statusCode() == 200 ? request.resolveResponse(response.body()) : NO_SCHEMA_ID;
-            if (schemaId != NO_SCHEMA_ID)
-            {
-                schemas.put(schemaId, schema);
-            }
-        }
-        catch (Exception ex)
-        {
-            ex.printStackTrace(System.out);
-        }
-        return schemaId;
+        this.event = new SchemaRegistryEventContext(context);
+        this.catalogId = catalogId;
     }
 
     @Override
@@ -209,12 +188,18 @@ public class SchemaRegistryCatalogHandler implements CatalogHandler
 
         try
         {
-            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() == 200 ? response.body() : null;
+            HttpResponse<String> httpResponse = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            boolean success = httpResponse.statusCode() == 200;
+            String responseBody = success ? httpResponse.body() : null;
+            if (!success)
+            {
+                event.remoteAccessRejected(catalogId, httpRequest, httpResponse.statusCode());
+            }
+            return responseBody;
         }
         catch (Exception ex)
         {
-            ex.printStackTrace(System.out);
+            event.remoteAccessRejected(catalogId, httpRequest, 0);
         }
         return null;
     }

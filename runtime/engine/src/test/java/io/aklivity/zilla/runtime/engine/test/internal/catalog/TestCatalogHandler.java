@@ -26,17 +26,8 @@ public class TestCatalogHandler implements CatalogHandler
     public TestCatalogHandler(
         TestCatalogOptionsConfig options)
     {
-        this.id = options != null ? options.id : 0;
+        this.id = options != null ? options.id : NO_SCHEMA_ID;
         this.schema = options != null ? options.schema : null;
-    }
-
-    @Override
-    public int register(
-        String subject,
-        String type,
-        String schema)
-    {
-        return id;
     }
 
     @Override

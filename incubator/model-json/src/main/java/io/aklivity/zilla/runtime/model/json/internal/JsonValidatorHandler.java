@@ -73,7 +73,6 @@ public class JsonValidatorHandler extends JsonModelHandler implements ValidatorH
                 int schemaId = catalog != null && catalog.id > 0
                     ? catalog.id
                     : handler.resolve(subject, catalog.version);
-                invalidateCacheOnSchemaUpdate(schemaId);
 
                 JsonProvider provider = supplyProvider(schemaId);
                 parser = provider.createParser(in);
@@ -86,7 +85,6 @@ public class JsonValidatorHandler extends JsonModelHandler implements ValidatorH
         catch (JsonParsingException ex)
         {
             status = false;
-            ex.printStackTrace();
         }
 
         return status;

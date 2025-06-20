@@ -67,6 +67,16 @@ public class PublishIT
     }
 
     @Test
+    @Configuration("server.yaml")
+    @Specification({
+        "${net}/publish.one.message.disconnect/client",
+        "${app}/publish.one.message.properties/server"})
+    public void shouldPublishOneMessageAndDisconnect() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
     @Configuration("server.validator.yaml")
     @Specification({
         "${net}/publish.invalid.message/client",
@@ -419,6 +429,16 @@ public class PublishIT
         "${net}/publish.qos2.ack.with.reasoncode/client",
         "${app}/publish.qos2.ack.with.reasoncode/server"})
     public void shouldPublishQoS2MessageAckWithReasoncode() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("server.yaml")
+    @Specification({
+        "${net}/publish.qos2.recovery/client",
+        "${app}/publish.qos2.recovery/server"})
+    public void shouldReleaseQos2PacketIdDuringRecovery() throws Exception
     {
         k3po.finish();
     }

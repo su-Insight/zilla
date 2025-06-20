@@ -48,6 +48,7 @@ import io.aklivity.zilla.runtime.binding.kafka.internal.cache.KafkaCachePartitio
 import io.aklivity.zilla.runtime.binding.kafka.internal.cache.KafkaCacheTopic;
 import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaBindingConfig;
 import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaRouteConfig;
+import io.aklivity.zilla.runtime.binding.kafka.internal.config.KafkaTopicType;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.Array32FW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.Flyweight;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaAckMode;
@@ -96,6 +97,8 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
             new Array32FW.Builder<>(new KafkaHeaderFW.Builder(), new KafkaHeaderFW())
                 .wrap(new UnsafeBuffer(new byte[8]), 0, 8)
                 .build();
+    private static final long PRODUCE_FLUSH_PRODUCER_ID = -1;
+    private static final short PRODUCE_FLUSH_PRODUCER_EPOCH = -1;
     private static final int PRODUCE_FLUSH_SEQUENCE = -1;
 
     private static final int ERROR_CORRUPT_MESSAGE = 2;
@@ -258,11 +261,10 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
                 final KafkaCache cache = supplyCache.apply(cacheName);
                 final KafkaCacheTopic topic = cache.supplyTopic(topicName);
                 final KafkaCachePartition partition = topic.supplyProducePartition(partitionId, localIndex);
-                final ConverterHandler convertKey = binding.resolveKeyWriter(topicName);
-                final ConverterHandler convertValue = binding.resolveValueWriter(topicName);
+                final KafkaTopicType topicType = binding.resolveTopicType(topicName);
                 final KafkaCacheClientProduceFan newFan =
                         new KafkaCacheClientProduceFan(routedId, resolvedId, authorization, budget,
-                            partition, cacheRoute, topicName, convertKey, convertValue);
+                            partition, cacheRoute, topicName, topicType);
 
                 cacheRoute.clientProduceFansByTopicPartition.put(partitionKey, newFan);
                 fan = newFan;
@@ -535,8 +537,7 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
             KafkaCachePartition partition,
             KafkaCacheRoute cacheRoute,
             String topicName,
-            ConverterHandler convertKey,
-            ConverterHandler convertValue)
+            KafkaTopicType topicType)
         {
             this.originId = originId;
             this.routedId = routedId;
@@ -546,8 +547,8 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
             this.budget = budget;
             this.cacheRoute = cacheRoute;
             this.topicName = topicName;
-            this.convertKey = convertKey;
-            this.convertValue = convertValue;
+            this.convertKey = topicType.keyWriter;
+            this.convertValue = topicType.valueWriter;
             this.members = new Long2ObjectHashMap<>();
             this.defaultOffset = KafkaOffsetType.LIVE;
             this.cursor = cursorFactory.newCursor(
@@ -683,6 +684,8 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
                 assert kafkaDataEx.kind() == KafkaDataExFW.KIND_PRODUCE;
                 KafkaProduceDataExFW kafkaProduceDataExFW = kafkaDataEx.produce();
                 final int deferred = kafkaProduceDataExFW.deferred();
+                final long producerId = kafkaProduceDataExFW.producerId();
+                final short producerEpoch = kafkaProduceDataExFW.producerEpoch();
                 final int sequence = kafkaProduceDataExFW.sequence();
                 final Array32FW<KafkaHeaderFW> headers = kafkaProduceDataExFW.headers();
                 final int headersSizeMax = headers.sizeof() + trailersSizeMax;
@@ -691,12 +694,6 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
                 final KafkaKeyFW key = kafkaProduceDataExFW.key();
                 final int valueLength = valueFragment != null ? valueFragment.sizeof() + deferred : -1;
                 final int maxValueLength = valueLength + headersSizeMax;
-
-                if ((flags & FLAGS_FIN) == 0x00 && deferred == 0)
-                {
-                    error = ERROR_CORRUPT_MESSAGE;
-                    break init;
-                }
 
                 if (maxValueLength > partition.segmentBytes())
                 {
@@ -714,8 +711,8 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
 
                     final long keyHash = partition.computeKeyHash(key);
                     if (partition.writeProduceEntryStart(partitionOffset, stream.segment, stream.entryMark, stream.valueMark,
-                        stream.valueLimit, timestamp, stream.initialId, sequence, ackMode, key, keyHash, valueLength,
-                        headers, trailersSizeMax, valueFragment, convertKey, convertValue) == -1)
+                        stream.valueLimit, timestamp, stream.initialId, producerId, producerEpoch, sequence, ackMode, key,
+                        keyHash, valueLength, headers, trailersSizeMax, valueFragment, convertKey, convertValue) == -1)
                     {
                         error = ERROR_INVALID_RECORD;
                         break init;
@@ -793,9 +790,9 @@ public final class KafkaCacheClientProduceFactory implements BindingHandler
 
                 final long keyHash = partition.computeKeyHash(EMPTY_KEY);
                 partition.writeProduceEntryStart(partitionOffset, stream.segment, stream.entryMark, stream.valueMark,
-                    stream.valueLimit, now().toEpochMilli(), stream.initialId, PRODUCE_FLUSH_SEQUENCE,
-                    KafkaAckMode.LEADER_ONLY, EMPTY_KEY, keyHash, 0, EMPTY_TRAILERS,
-                    trailersSizeMax, EMPTY_OCTETS, convertKey, convertValue);
+                    stream.valueLimit, now().toEpochMilli(), stream.initialId, PRODUCE_FLUSH_PRODUCER_ID,
+                    PRODUCE_FLUSH_PRODUCER_EPOCH, PRODUCE_FLUSH_SEQUENCE, KafkaAckMode.LEADER_ONLY, EMPTY_KEY, keyHash,
+                    0, EMPTY_TRAILERS, trailersSizeMax, EMPTY_OCTETS, convertKey, convertValue);
                 stream.partitionOffset = partitionOffset;
                 partitionOffset++;
 

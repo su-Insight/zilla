@@ -39,19 +39,10 @@ public class InlineCatalogHandler implements CatalogHandler
     }
 
     @Override
-    public int register(
-        String subject,
-        String type,
-        String schema)
-    {
-        return NO_SCHEMA_ID;
-    }
-
-    @Override
     public String resolve(
         int schemaId)
     {
-        return  schemas.containsKey(schemaId) ? schemas.get(schemaId) : null;
+        return schemas.getOrDefault(schemaId, null);
     }
 
     @Override
@@ -60,7 +51,7 @@ public class InlineCatalogHandler implements CatalogHandler
         String version)
     {
         String key = subject + version;
-        return schemaIds.containsKey(key) ? schemaIds.get(key) : NO_SCHEMA_ID;
+        return schemaIds.getOrDefault(key, NO_SCHEMA_ID);
     }
 
     private int generateCRC32C(

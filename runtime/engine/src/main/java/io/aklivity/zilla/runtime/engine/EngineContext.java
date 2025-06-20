@@ -18,12 +18,14 @@ package io.aklivity.zilla.runtime.engine;
 import java.net.InetAddress;
 import java.net.URL;
 import java.nio.channels.SelectableChannel;
+import java.time.Clock;
 import java.util.function.LongSupplier;
 
 import org.agrona.MutableDirectBuffer;
 
 import io.aklivity.zilla.runtime.engine.binding.BindingHandler;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
+import io.aklivity.zilla.runtime.engine.binding.function.MessageReader;
 import io.aklivity.zilla.runtime.engine.budget.BudgetCreditor;
 import io.aklivity.zilla.runtime.engine.budget.BudgetDebitor;
 import io.aklivity.zilla.runtime.engine.buffer.BufferPool;
@@ -32,6 +34,7 @@ import io.aklivity.zilla.runtime.engine.concurrent.Signaler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
+import io.aklivity.zilla.runtime.engine.event.EventFormatter;
 import io.aklivity.zilla.runtime.engine.guard.GuardHandler;
 import io.aklivity.zilla.runtime.engine.metrics.Metric;
 import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
@@ -68,6 +71,8 @@ public interface EngineContext
 
     MessageConsumer supplyReceiver(
         long streamId);
+
+    EventFormatter supplyEventFormatter();
 
     void detachSender(
         long replyId);
@@ -117,6 +122,12 @@ public interface EngineContext
     String supplyLocalName(
         long namespacedId);
 
+    String supplyQName(
+        long namespacedId);
+
+    int supplyEventId(
+        String name);
+
     BindingHandler streamFactory();
 
     GuardHandler supplyGuard(
@@ -148,4 +159,10 @@ public interface EngineContext
 
     void onExporterDetached(
         long exporterId);
+
+    MessageConsumer supplyEventWriter();
+
+    MessageReader supplyEventReader();
+
+    Clock clock();
 }

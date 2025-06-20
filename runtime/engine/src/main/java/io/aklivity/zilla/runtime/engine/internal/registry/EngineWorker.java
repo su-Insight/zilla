@@ -42,6 +42,7 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.SelectableChannel;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.Collection;
@@ -60,6 +61,7 @@ import java.util.function.LongConsumer;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
+import java.util.function.Supplier;
 
 import org.agrona.DeadlineTimerWheel;
 import org.agrona.DeadlineTimerWheel.TimerHandler;
@@ -86,6 +88,7 @@ import io.aklivity.zilla.runtime.engine.binding.Binding;
 import io.aklivity.zilla.runtime.engine.binding.BindingContext;
 import io.aklivity.zilla.runtime.engine.binding.BindingHandler;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
+import io.aklivity.zilla.runtime.engine.binding.function.MessageReader;
 import io.aklivity.zilla.runtime.engine.budget.BudgetCreditor;
 import io.aklivity.zilla.runtime.engine.budget.BudgetDebitor;
 import io.aklivity.zilla.runtime.engine.buffer.BufferPool;
@@ -96,6 +99,8 @@ import io.aklivity.zilla.runtime.engine.concurrent.Signaler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
+import io.aklivity.zilla.runtime.engine.event.EventFormatter;
+import io.aklivity.zilla.runtime.engine.event.EventFormatterFactory;
 import io.aklivity.zilla.runtime.engine.exporter.Exporter;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterContext;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterHandler;
@@ -108,11 +113,11 @@ import io.aklivity.zilla.runtime.engine.internal.budget.DefaultBudgetDebitor;
 import io.aklivity.zilla.runtime.engine.internal.exporter.ExporterAgent;
 import io.aklivity.zilla.runtime.engine.internal.layouts.BudgetsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.BufferPoolLayout;
+import io.aklivity.zilla.runtime.engine.internal.layouts.EventsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.StreamsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.metrics.HistogramsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.metrics.ScalarsLayout;
 import io.aklivity.zilla.runtime.engine.internal.poller.Poller;
-import io.aklivity.zilla.runtime.engine.internal.stream.NamespacedId;
 import io.aklivity.zilla.runtime.engine.internal.stream.StreamId;
 import io.aklivity.zilla.runtime.engine.internal.stream.Target;
 import io.aklivity.zilla.runtime.engine.internal.types.stream.AbortFW;
@@ -133,6 +138,7 @@ import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
 import io.aklivity.zilla.runtime.engine.model.Model;
 import io.aklivity.zilla.runtime.engine.model.ModelContext;
 import io.aklivity.zilla.runtime.engine.model.ValidatorHandler;
+import io.aklivity.zilla.runtime.engine.namespace.NamespacedId;
 import io.aklivity.zilla.runtime.engine.poller.PollerKey;
 import io.aklivity.zilla.runtime.engine.util.function.LongLongFunction;
 import io.aklivity.zilla.runtime.engine.vault.Vault;
@@ -210,6 +216,9 @@ public class EngineWorker implements EngineContext, Agent
     private final ScalarsLayout countersLayout;
     private final ScalarsLayout gaugesLayout;
     private final HistogramsLayout histogramsLayout;
+    private final EventsLayout eventsLayout;
+    private final Supplier<MessageReader> supplyEventReader;
+    private final EventFormatter eventFormatter;
     private long initialId;
     private long promiseId;
     private long traceId;
@@ -232,6 +241,8 @@ public class EngineWorker implements EngineContext, Agent
         Collection<Model> models,
         Collection<MetricGroup> metricGroups,
         Collector collector,
+        Supplier<MessageReader> supplyEventReader,
+        EventFormatterFactory eventFormatterFactory,
         int index,
         boolean readonly)
     {
@@ -284,6 +295,11 @@ public class EngineWorker implements EngineContext, Agent
                 .slotCount(config.bufferPoolCapacity() / config.bufferSlotCapacity())
                 .readonly(readonly)
                 .build();
+
+        this.eventsLayout = new EventsLayout.Builder()
+            .path(config.directory().resolve(String.format("events%d", index)))
+            .capacity(config.eventsBufferCapacity())
+            .build();
 
         this.agentName = String.format("engine/data#%d", index);
         this.streamsLayout = streamsLayout;
@@ -407,6 +423,8 @@ public class EngineWorker implements EngineContext, Agent
         this.idleStrategy = idleStrategy;
         this.errorHandler = errorHandler;
         this.exportersById = new Long2ObjectHashMap<>();
+        this.supplyEventReader = supplyEventReader;
+        this.eventFormatter = eventFormatterFactory.create(config, this);
     }
 
     public static int indexOfId(
@@ -439,6 +457,21 @@ public class EngineWorker implements EngineContext, Agent
         long namespacedId)
     {
         return labels.lookupLabel(NamespacedId.localId(namespacedId));
+    }
+
+    @Override
+    public String supplyQName(
+        long namespacedId)
+    {
+        return String.format("%s.%s", labels.lookupLabel(NamespacedId.namespaceId(namespacedId)),
+            labels.lookupLabel(NamespacedId.localId(namespacedId)));
+    }
+
+    @Override
+    public int supplyEventId(
+        String name)
+    {
+        return labels.supplyLabelId(name);
     }
 
     @Override
@@ -893,6 +926,18 @@ public class EngineWorker implements EngineContext, Agent
         long metricId)
     {
         return histogramsLayout.supplyWriter(bindingId, metricId);
+    }
+
+    @Override
+    public MessageConsumer supplyEventWriter()
+    {
+        return this.eventsLayout::writeEvent;
+    }
+
+    @Override
+    public Clock clock()
+    {
+        return Clock.systemUTC();
     }
 
     private void onSystemMessage(
@@ -1555,6 +1600,29 @@ public class EngineWorker implements EngineContext, Agent
     {
         final int remoteIndex = serverIndex(streamId);
         return writersByIndex.computeIfAbsent(remoteIndex, supplyWriter);
+    }
+
+    public int readEvent(
+        MessageConsumer handler,
+        int messageCountLimit)
+    {
+        return eventsLayout.readEvent(handler, messageCountLimit);
+    }
+
+    public int peekEvent(
+        MessageConsumer handler)
+    {
+        return eventsLayout.peekEvent(handler);
+    }
+
+    public MessageReader supplyEventReader()
+    {
+        return supplyEventReader.get();
+    }
+
+    public EventFormatter supplyEventFormatter()
+    {
+        return this.eventFormatter;
     }
 
     private MessageConsumer supplyWriter(
