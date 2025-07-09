@@ -1895,7 +1895,7 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
         {
             final long traceId = reset.traceId();
 
-            state = KafkaState.closedInitial(state);
+            state = KafkaState.closedReply(state);
 
             client.doNetworkResetIfNecessary(traceId);
         }
@@ -2762,6 +2762,8 @@ public final class KafkaClientFetchFactory extends KafkaClientSaslHandshaker imp
                 }
 
                 doNetworkData(traceId, budgetId, encodeBuffer, encodeOffset, encodeProgress);
+
+                client.decodeRecordBatchLastOffset = nextOffset - 1;
 
                 this.decoder = decodeFetchResponse;
             }

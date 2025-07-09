@@ -671,7 +671,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
             replyAck = acknowledge;
             replyMax = maximum;
             replyPad = padding;
-            state = MqttKafkaState.openReply(state);
+            state = MqttKafkaState.openReplyOnly(state);
             this.replyBud = window.budgetId();
 
             assert replyAck <= replySeq;
@@ -692,10 +692,13 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
             long authorization,
             long affinity)
         {
-            state = MqttKafkaState.openingReply(state);
+            if (!MqttKafkaState.replyOpening(state))
+            {
+                state = MqttKafkaState.openingReply(state);
 
-            doBegin(mqtt, originId, routedId, replyId, replySeq, replyAck, replyMax,
-                traceId, authorization, affinity);
+                doBegin(mqtt, originId, routedId, replyId, replySeq, replyAck, replyMax,
+                    traceId, authorization, affinity);
+            }
         }
 
         private void doMqttData(
@@ -2069,7 +2072,7 @@ public class MqttKafkaSubscribeFactory implements MqttKafkaStreamFactory
                                 if (((filters >> i) & 1) == 1)
                                 {
                                     long subscriptionId = mqtt.retainedSubscriptionIds.get(i);
-                                    if (mqtt.retainAsPublished.getOrDefault(subscriptionId, false))
+                                    if (mqtt.retainAsPublished.getOrDefault(subscriptionId, Boolean.FALSE))
                                     {
                                         flag |= RETAIN_FLAG;
                                     }

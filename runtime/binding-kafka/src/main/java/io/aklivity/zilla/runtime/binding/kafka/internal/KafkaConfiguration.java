@@ -73,6 +73,7 @@ public class KafkaConfiguration extends Configuration
     public static final PropertyDef<Duration> KAFKA_CLIENT_GROUP_REBALANCE_TIMEOUT;
     public static final IntPropertyDef KAFKA_CLIENT_GROUP_MIN_SESSION_TIMEOUT_DEFAULT;
     public static final IntPropertyDef KAFKA_CLIENT_GROUP_MAX_SESSION_TIMEOUT_DEFAULT;
+    public static final IntPropertyDef KAFKA_CLIENT_GROUP_INITIAL_REBALANCE_DELAY_DEFAULT;
     public static final PropertyDef<String> KAFKA_CLIENT_ID;
     public static final PropertyDef<InstanceIdSupplier> KAFKA_CLIENT_INSTANCE_ID;
     public static final BooleanPropertyDef KAFKA_CLIENT_CONNECTION_POOL;
@@ -105,6 +106,8 @@ public class KafkaConfiguration extends Configuration
             (int) Duration.ofSeconds(6).toMillis());
         KAFKA_CLIENT_GROUP_MAX_SESSION_TIMEOUT_DEFAULT = config.property("client.group.max.session.timeout.default",
             (int) Duration.ofMinutes(5).toMillis());
+        KAFKA_CLIENT_GROUP_INITIAL_REBALANCE_DELAY_DEFAULT = config.property("client.group.initial.rebalance.delay.default",
+            0);
         KAFKA_CACHE_DIRECTORY = config.property(Path.class, "cache.directory",
             KafkaConfiguration::cacheDirectory, KafkaBinding.NAME);
         KAFKA_CACHE_SERVER_BOOTSTRAP = config.property("cache.server.bootstrap", true);
@@ -315,6 +318,11 @@ public class KafkaConfiguration extends Configuration
         return KAFKA_CLIENT_GROUP_MAX_SESSION_TIMEOUT_DEFAULT.get(this);
     }
 
+    public int clientGroupInitialRebalanceDelayDefault()
+    {
+        return KAFKA_CLIENT_GROUP_INITIAL_REBALANCE_DELAY_DEFAULT.get(this);
+    }
+
     private static boolean supplyVerbose(
         Configuration config)
     {
@@ -435,6 +443,13 @@ public class KafkaConfiguration extends Configuration
     private static InstanceIdSupplier defaultInstanceId(
         Configuration config)
     {
-        return () -> String.format("%s-%s", KAFKA_CLIENT_ID.get(config), UUID.randomUUID());
+        return () -> String.format("%s-%s", clientIdWithDefault(config), UUID.randomUUID());
+    }
+
+    private static String clientIdWithDefault(
+        Configuration config)
+    {
+        String clientId = KAFKA_CLIENT_ID.get(config);
+        return clientId != null ? clientId : KAFKA_CLIENT_ID_DEFAULT;
     }
 }

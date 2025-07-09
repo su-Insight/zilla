@@ -85,8 +85,6 @@ public final class KafkaCachePartition
     private static final long NO_ANCESTOR_OFFSET = -1L;
     private static final long NO_DESCENDANT_OFFSET = -1L;
     private static final int NO_SEQUENCE = -1;
-    private static final short NO_PRODUCER_ID = -1;
-    private static final short NO_PRODUCER_EPOCH = -1;
     private static final int NO_ACKNOWLEDGE = 0;
     private static final int NO_CONVERTED_POSITION = -1;
     private static final int NO_DELTA_POSITION = -1;
@@ -334,6 +332,7 @@ public final class KafkaCachePartition
 
     public void writeEntry(
         EngineContext context,
+        long traceId,
         long bindingId,
         long offset,
         MutableInteger entryMark,
@@ -352,14 +351,16 @@ public final class KafkaCachePartition
     {
         final long keyHash = computeHash(key);
         final int valueLength = value != null ? value.sizeof() : -1;
-        writeEntryStart(context, bindingId, offset, entryMark, valueMark, timestamp, producerId, key,
+        writeEntryStart(context, traceId, bindingId, offset, entryMark, valueMark, timestamp, producerId, key,
             keyHash, valueLength, ancestor, entryFlags, deltaType, value, convertKey, convertValue, verbose);
-        writeEntryContinue(context, bindingId, FLAGS_COMPLETE, offset, entryMark, valueMark, value, convertValue, verbose);
+        writeEntryContinue(context, traceId, bindingId, FLAGS_COMPLETE, offset, entryMark, valueMark, value,
+            convertValue, verbose);
         writeEntryFinish(headers, deltaType);
     }
 
     public void writeEntryStart(
         EngineContext context,
+        long traceId,
         long bindingId,
         long offset,
         MutableInteger entryMark,
@@ -408,7 +409,7 @@ public final class KafkaCachePartition
         this.ancestorEntry = ancestor;
 
         int convertedPos = NO_CONVERTED_POSITION;
-        if (convertValue != ConverterHandler.NONE)
+        if (valueLength != -1 && convertValue != ConverterHandler.NONE)
         {
             int convertedPadding = convertValue.padding(payload.buffer(), payload.offset(), payload.sizeof());
             int convertedMaxLength = valueMaxLength + convertedPadding;
@@ -448,7 +449,8 @@ public final class KafkaCachePartition
                 logFile.appendBytes(buffer, index, length);
             };
             OctetsFW value = key.value();
-            int converted = convertKey.convert(value.buffer(), value.offset(), value.sizeof(), writeKey);
+            int converted = convertKey.convert(traceId, bindingId, value.buffer(), value.offset(),
+                value.sizeof(), writeKey);
             if (converted == -1)
             {
                 logFile.writeInt(entryMark.value + FIELD_OFFSET_FLAGS, CACHE_ENTRY_FLAGS_ABORTED);
@@ -481,6 +483,7 @@ public final class KafkaCachePartition
 
     public void writeEntryContinue(
         EngineContext context,
+        long traceId,
         long bindingId,
         int flags,
         long offset,
@@ -526,7 +529,8 @@ public final class KafkaCachePartition
 
             if ((flags & FLAGS_FIN) != 0x00 && (entryFlags & CACHE_ENTRY_FLAGS_ABORTED) == 0x00)
             {
-                int converted = convertValue.convert(logFile.buffer(), valueMark.value, valueLength, consumeConverted);
+                int converted = convertValue.convert(traceId, bindingId, logFile.buffer(),
+                    valueMark.value, valueLength, consumeConverted);
                 if (converted == -1)
                 {
                     logFile.writeInt(entryMark.value + FIELD_OFFSET_FLAGS, CACHE_ENTRY_FLAGS_ABORTED);
@@ -623,6 +627,8 @@ public final class KafkaCachePartition
     }
 
     public int writeProduceEntryStart(
+        long traceId,
+        long bindingId,
         long offset,
         Node head,
         MutableInteger entryMark,
@@ -656,7 +662,7 @@ public final class KafkaCachePartition
         final int valueMaxLength = valueLength == -1 ? 0 : valueLength;
 
         int convertedPos = NO_CONVERTED_POSITION;
-        if (convertValue != ConverterHandler.NONE)
+        if (valueLength != -1 && convertValue != ConverterHandler.NONE)
         {
             int convertedPadding = convertValue.padding(payload.buffer(), payload.offset(), payload.sizeof());
             int convertedMaxLength = valueMaxLength + convertedPadding;
@@ -703,7 +709,8 @@ public final class KafkaCachePartition
                     logFile.appendBytes(buffer, index, length);
                 };
 
-                converted = convertKey.convert(value.buffer(), value.offset(), value.sizeof(), writeKey);
+                converted = convertKey.convert(traceId, bindingId, value.buffer(),
+                    value.offset(), value.sizeof(), writeKey);
 
                 if (converted == -1)
                 {
@@ -735,6 +742,8 @@ public final class KafkaCachePartition
     }
 
     public int writeProduceEntryContinue(
+        long traceId,
+        long bindingId,
         int flags,
         Node head,
         MutableInteger entryMark,
@@ -773,7 +782,8 @@ public final class KafkaCachePartition
                 final int valueLength = valueLimit.value - valueMark.value;
                 if ((flags & FLAGS_FIN) != 0x00)
                 {
-                    converted = convertValue.convert(logFile.buffer(), valueMark.value, valueLength, consumeConverted);
+                    converted = convertValue.convert(traceId, bindingId, logFile.buffer(),
+                        valueMark.value, valueLength, consumeConverted);
                 }
             }
         }

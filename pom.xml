@@ -45,7 +45,7 @@
     <checkstyle.config.location>io/aklivity/zilla/conf/checkstyle/configuration.xml</checkstyle.config.location>
     <checkstyle.suppressions.location>io/aklivity/zilla/conf/checkstyle/suppressions.xml</checkstyle.suppressions.location>
     <antlr4.version>4.13.0</antlr4.version>
-    <agrona.version>1.6.0</agrona.version>
+    <agrona.version>1.21.1</agrona.version>
     <slf4j.version>1.7.36</slf4j.version>
     <junit.version>5.10.1</junit.version>
     <byteman.version>4.0.22</byteman.version>
@@ -366,7 +366,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.12.1</version>
+          <version>3.13.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -693,6 +693,17 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+
+    <profile>
+      <id>jdk21plus</id>
+      <activation>
+        <jdk>[21.0,)</jdk>
+      </activation>
+
+      <properties>
+        <maven.compiler.proc>full</maven.compiler.proc>
+      </properties>
     </profile>
   </profiles>
 </project>

@@ -97,6 +97,7 @@ import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2IntHashMap;
@@ -405,6 +406,7 @@ public final class MqttServerFactory implements MqttStreamFactory
     private final Map<MqttPacketType, MqttServerDecoder> decodersByPacketTypeV4;
     private final Map<MqttPacketType, MqttServerDecoder> decodersByPacketTypeV5;
     private final IntSupplier supplySubscriptionId;
+    private final MqttQoS publishQosMax;
     private final EngineContext context;
 
     private int maximumPacketSize = Integer.MAX_VALUE;
@@ -519,6 +521,7 @@ public final class MqttServerFactory implements MqttStreamFactory
         this.validator = new MqttValidator();
         this.utf8Decoder = StandardCharsets.UTF_8.newDecoder();
         this.supplySubscriptionId = config.subscriptionId();
+        this.publishQosMax = config.publishQosMax();
         final Optional<String16FW> clientId = Optional.ofNullable(config.clientId()).map(String16FW::new);
         this.supplyClientId = clientId.isPresent() ? clientId::get : () -> new String16FW(UUID.randomUUID().toString());
         this.decodePacketTypeByVersion = new Int2ObjectHashMap<>();
@@ -969,7 +972,7 @@ public final class MqttServerFactory implements MqttStreamFactory
                 server.onDecodeError(traceId, authorization, PACKET_TOO_LARGE);
                 server.decoder = decodeIgnoreAll;
             }
-            else if (length >= 0)
+            else if (limit - packet.limit() >= length || server.decodeBudget() == 0)
             {
                 server.decodeablePacketBytes = packet.sizeof() + length;
                 server.decoder = decoder;
@@ -1387,7 +1390,7 @@ public final class MqttServerFactory implements MqttStreamFactory
 
             final MqttPublishHelper mqttPublishHelper = this.mqttPublishHelper.reset();
 
-            reasonCode = mqttPublishHelper.decodeV5(server, topicName, properties, typeAndFlags, qos, packetId);
+            reasonCode = mqttPublishHelper.decodeV5(traceId, server, topicName, properties, typeAndFlags, qos, packetId);
 
             if (reasonCode == SUCCESS)
             {
@@ -1478,7 +1481,7 @@ public final class MqttServerFactory implements MqttStreamFactory
             int publishablePayloadSize =
                 Math.min(Math.min(server.publishPayloadBytes, publisher.initialBudget()), length);
 
-            final OctetsFW payload = payloadRO.wrap(buffer, offset, limit);
+            final OctetsFW payload = payloadRO.wrap(buffer, offset, offset + publishablePayloadSize);
 
             boolean canPublish = MqttState.initialOpened(publisher.state);
 
@@ -2937,7 +2940,7 @@ public final class MqttServerFactory implements MqttStreamFactory
                     .session(s -> s
                         .flags(connectFlags & (CLEAN_START_FLAG_MASK | WILL_FLAG_MASK))
                         .expiry(sessionExpiry)
-                        .publishQosMax(MqttQoS.EXACTLY_ONCE.value())
+                        .publishQosMax(publishQosMax.value())
                         .capabilities(capabilities)
                         .clientId(clientId));
 
@@ -3228,7 +3231,7 @@ public final class MqttServerFactory implements MqttStreamFactory
                 reasonCode = PAYLOAD_FORMAT_INVALID;
             }
 
-            if (model != null && !validContent(model, payload))
+            if (model != null && !validContent(traceId, model, payload))
             {
                 reasonCode = PAYLOAD_FORMAT_INVALID;
             }
@@ -4963,11 +4966,18 @@ public final class MqttServerFactory implements MqttStreamFactory
         }
 
         private boolean validContent(
+            long traceId,
             ValidatorHandler contentType,
             OctetsFW payload)
         {
             return contentType == null ||
-                contentType.validate(payload.buffer(), payload.offset(), payload.sizeof(), ValueConsumer.NOP);
+                contentType.validate(traceId, routedId, payload.buffer(), payload.offset(),
+                    payload.sizeof(), ValueConsumer.NOP);
+        }
+
+        private int decodeBudget()
+        {
+            return decodeMax - (int) (decodeSeq - decodeAck);
         }
 
         private final class Subscription
@@ -6983,6 +6993,7 @@ public final class MqttServerFactory implements MqttStreamFactory
         }
 
         private int decodeV5(
+            long traceId,
             MqttServer server,
             String16FW topicName,
             MqttPropertiesFW properties,
@@ -7008,6 +7019,7 @@ public final class MqttServerFactory implements MqttStreamFactory
             else
             {
                 flags = calculatePublishApplicationFlags(typeAndFlags);
+                final MqttBindingConfig binding = bindings.get(server.routedId);
 
                 int alias = 0;
 
@@ -7078,6 +7090,11 @@ public final class MqttServerFactory implements MqttStreamFactory
                     case KIND_USER_PROPERTY:
                         final MqttUserPropertyFW userProperty = mqttProperty.userProperty();
                         userPropertiesRW.item(c -> c.key(userProperty.key()).value(userProperty.value()));
+                        final ModelConfig config = binding.supplyUserPropertyModelConfig(topic, userProperty.key());
+                        if (!validateUserProperty(traceId, server.routedId, userProperty.value(), config))
+                        {
+                            reasonCode = PAYLOAD_FORMAT_INVALID;
+                        }
                         break;
                     default:
                         reasonCode = MALFORMED_PACKET;
@@ -7089,6 +7106,17 @@ public final class MqttServerFactory implements MqttStreamFactory
             }
 
             return reasonCode;
+        }
+
+        private boolean validateUserProperty(
+            long traceId,
+            long routedId,
+            String16FW userProperty,
+            ModelConfig config)
+        {
+            return config == null ||
+                supplyValidator.apply(config).validate(traceId, routedId, userProperty.buffer(),
+                    userProperty.offset() + BitUtil.SIZE_OF_SHORT, userProperty.length(), ValueConsumer.NOP);
         }
 
         private int decodeV4(
