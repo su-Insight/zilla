@@ -26,13 +26,15 @@ public interface CatalogHandler
     @FunctionalInterface
     interface Decoder
     {
-        Decoder IDENTITY = (schemaId, data, index, length, next) ->
+        Decoder IDENTITY = (traceId, bindingId, schemaId, data, index, length, next) ->
         {
             next.accept(data, index, length);
             return length;
         };
 
         int accept(
+            long traceId,
+            long bindingId,
             int schemaId,
             DirectBuffer data,
             int index,
@@ -43,24 +45,21 @@ public interface CatalogHandler
     @FunctionalInterface
     interface Encoder
     {
-        Encoder IDENTITY = (schemaId, data, index, length, next) ->
+        Encoder IDENTITY = (traceId, bindingId, schemaId, data, index, length, next) ->
         {
             next.accept(data, index, length);
             return length;
         };
 
         int accept(
+            long traceId,
+            long bindingId,
             int schemaId,
             DirectBuffer data,
             int index,
             int length,
             ValueConsumer next);
     }
-
-    int register(
-        String subject,
-        String type,
-        String schema);
 
     String resolve(
         int schemaId);
@@ -78,16 +77,20 @@ public interface CatalogHandler
     }
 
     default int decode(
+        long traceId,
+        long bindingId,
         DirectBuffer data,
         int index,
         int length,
         ValueConsumer next,
         Decoder decoder)
     {
-        return decoder.accept(NO_SCHEMA_ID, data, index, length, next);
+        return decoder.accept(traceId, bindingId, NO_SCHEMA_ID, data, index, length, next);
     }
 
     default int encode(
+        long traceId,
+        long bindingId,
         int schemaId,
         DirectBuffer data,
         int index,
@@ -95,7 +98,7 @@ public interface CatalogHandler
         ValueConsumer next,
         Encoder encoder)
     {
-        return encoder.accept(schemaId, data, index, length, next);
+        return encoder.accept(traceId, bindingId, schemaId, data, index, length, next);
     }
 
     default int encodePadding()
