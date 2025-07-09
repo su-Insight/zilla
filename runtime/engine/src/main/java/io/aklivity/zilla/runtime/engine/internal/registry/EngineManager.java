@@ -15,10 +15,13 @@
  */
 package io.aklivity.zilla.runtime.engine.internal.registry;
 
+import static java.util.stream.Collectors.toList;
+
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -43,6 +46,7 @@ import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
 import io.aklivity.zilla.runtime.engine.config.ConfigException;
 import io.aklivity.zilla.runtime.engine.config.EngineConfig;
 import io.aklivity.zilla.runtime.engine.config.EngineConfigReader;
+import io.aklivity.zilla.runtime.engine.config.EngineConfigWriter;
 import io.aklivity.zilla.runtime.engine.config.ExporterConfig;
 import io.aklivity.zilla.runtime.engine.config.GuardConfig;
 import io.aklivity.zilla.runtime.engine.config.GuardedConfig;
@@ -188,9 +192,22 @@ public class EngineManager
 
             engine = reader.read(configText);
 
+            final List<GuardConfig> guards = engine.namespaces.stream()
+                .map(n -> n.guards)
+                .flatMap(gs -> gs.stream())
+                .collect(toList());
+
             for (NamespaceConfig namespace : engine.namespaces)
             {
-                process(namespace, namespaceReadURL);
+                process(guards, namespace, namespaceReadURL);
+            }
+
+            if (config.verboseComposites())
+            {
+                EngineConfigWriter writer = new EngineConfigWriter(null);
+                engine.namespaces.stream()
+                    .flatMap(n -> n.bindings.stream().flatMap(b -> b.composites.stream()))
+                    .forEach(n -> System.out.println(writer.write(n)));
             }
         }
         catch (Throwable ex)
@@ -202,6 +219,7 @@ public class EngineManager
     }
 
     private void process(
+        List<GuardConfig> guards,
         NamespaceConfig namespace,
         Function<String, String> readURL)
     {
@@ -281,14 +299,14 @@ public class EngineManager
                     {
                         guarded.id = resolver.resolve(guarded.name);
 
-                        LongPredicate authorizer = namespace.guards.stream()
+                        LongPredicate authorizer = guards.stream()
                             .filter(g -> g.id == guarded.id)
                             .findFirst()
                             .map(g -> guardByType.apply(g.type))
                             .map(g -> g.verifier(EngineWorker::indexOfId, guarded))
                             .orElse(session -> false);
 
-                        LongFunction<String> identifier = namespace.guards.stream()
+                        LongFunction<String> identifier = guards.stream()
                             .filter(g -> g.id == guarded.id)
                             .findFirst()
                             .map(g -> guardByType.apply(g.type))
@@ -296,6 +314,7 @@ public class EngineManager
                             .orElse(session -> null);
 
                         guarded.identity = identifier;
+                        guarded.qname = resolver.format(guarded.id);
 
                         route.authorized = route.authorized.and(authorizer);
                     }
@@ -325,7 +344,7 @@ public class EngineManager
 
             for (NamespaceConfig composite : binding.composites)
             {
-                process(composite, readURL);
+                process(guards, composite, readURL);
             }
 
             long affinity = tuning.affinity(binding.id);
@@ -396,8 +415,10 @@ public class EngineManager
                 .directory(config.directory())
                 .build())
         {
-            for (NamespaceConfig namespace : engine.namespaces)
+            LinkedList<NamespaceConfig> namespaces = new LinkedList<>(engine.namespaces);
+            for (int i = 0; i < namespaces.size(); i++)
             {
+                NamespaceConfig namespace = namespaces.get(i);
                 for (BindingConfig binding : namespace.bindings)
                 {
                     long typeId = binding.resolveId.applyAsLong(binding.type);
@@ -406,6 +427,10 @@ public class EngineManager
                     long originTypeId = binding.resolveId.applyAsLong(typed.originType(binding.kind));
                     long routedTypeId = binding.resolveId.applyAsLong(typed.routedType(binding.kind));
                     layout.writeBindingInfo(binding.id, typeId, kindId, originTypeId, routedTypeId);
+                    if (binding.composites != null)
+                    {
+                        namespaces.addAll(binding.composites);
+                    }
                 }
             }
         }

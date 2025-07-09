@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiMessage;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiServer;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiMessageView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
@@ -33,6 +34,7 @@ public abstract class AsyncapiProtocol
 {
     protected static final String INLINE_CATALOG_NAME = "catalog0";
     protected static final Pattern JSON_CONTENT_TYPE = Pattern.compile("^application/(?:.+\\+)?json$");
+    protected static final String VERSION_LATEST = "latest";
 
     protected final Matcher jsonContentType = JSON_CONTENT_TYPE.matcher("");
 
@@ -85,8 +87,9 @@ public abstract class AsyncapiProtocol
             {
                 cataloged
                     .schema()
-                    .subject(schema)
-                    .build()
+                        .version(VERSION_LATEST)
+                        .subject(schema)
+                        .build()
                     .build();
             }
             else
@@ -116,10 +119,12 @@ public abstract class AsyncapiProtocol
     {
         requireNonNull(scheme);
         int[] ports = null;
-        URI url = findFirstServerUrlWithScheme(scheme);
-        if (url != null)
+
+        for (AsyncapiServer s : asyncApi.servers.values())
         {
-            ports = new int[] {url.getPort()};
+            String[] hostAndPort = s.host.split(":");
+            ports = new int[] {Integer.parseInt(hostAndPort[1])};
+            break;
         }
         return ports;
     }

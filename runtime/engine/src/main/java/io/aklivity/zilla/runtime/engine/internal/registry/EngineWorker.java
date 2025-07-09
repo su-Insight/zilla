@@ -99,6 +99,8 @@ import io.aklivity.zilla.runtime.engine.concurrent.Signaler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
+import io.aklivity.zilla.runtime.engine.event.EventFormatter;
+import io.aklivity.zilla.runtime.engine.event.EventFormatterFactory;
 import io.aklivity.zilla.runtime.engine.exporter.Exporter;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterContext;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterHandler;
@@ -216,6 +218,7 @@ public class EngineWorker implements EngineContext, Agent
     private final HistogramsLayout histogramsLayout;
     private final EventsLayout eventsLayout;
     private final Supplier<MessageReader> supplyEventReader;
+    private final EventFormatter eventFormatter;
     private long initialId;
     private long promiseId;
     private long traceId;
@@ -239,6 +242,7 @@ public class EngineWorker implements EngineContext, Agent
         Collection<MetricGroup> metricGroups,
         Collector collector,
         Supplier<MessageReader> supplyEventReader,
+        EventFormatterFactory eventFormatterFactory,
         int index,
         boolean readonly)
     {
@@ -420,6 +424,7 @@ public class EngineWorker implements EngineContext, Agent
         this.errorHandler = errorHandler;
         this.exportersById = new Long2ObjectHashMap<>();
         this.supplyEventReader = supplyEventReader;
+        this.eventFormatter = eventFormatterFactory.create(config, this);
     }
 
     public static int indexOfId(
@@ -460,6 +465,13 @@ public class EngineWorker implements EngineContext, Agent
     {
         return String.format("%s.%s", labels.lookupLabel(NamespacedId.namespaceId(namespacedId)),
             labels.lookupLabel(NamespacedId.localId(namespacedId)));
+    }
+
+    @Override
+    public int supplyEventId(
+        String name)
+    {
+        return labels.supplyLabelId(name);
     }
 
     @Override
@@ -1606,6 +1618,11 @@ public class EngineWorker implements EngineContext, Agent
     public MessageReader supplyEventReader()
     {
         return supplyEventReader.get();
+    }
+
+    public EventFormatter supplyEventFormatter()
+    {
+        return this.eventFormatter;
     }
 
     private MessageConsumer supplyWriter(

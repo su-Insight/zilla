@@ -109,11 +109,6 @@
       <version>2.16.1</version>
     </dependency>
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>2.16.1</version>
-    </dependency>
-    <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>engine</artifactId>
       <type>test-jar</type>
@@ -213,7 +208,10 @@
                   </fileMappers>
                 </artifactItem>
               </artifactItems>
-              <includes>io/aklivity/zilla/specs/binding/asyncapi/schema/*.json</includes>
+              <includes>io/aklivity/zilla/specs/binding/asyncapi/schema/asyncapi.schema.patch.json,
+                io/aklivity/zilla/specs/binding/asyncapi/schema/asyncapi.2.6.0.schema.json,
+                io/aklivity/zilla/specs/binding/asyncapi/schema/asyncapi.3.0.1.schema.json
+              </includes>
               <outputDirectory>${project.build.directory}/classes</outputDirectory>
             </configuration>
           </execution>
