@@ -80,6 +80,16 @@ public class CacheMergedIT
         k3po.finish();
     }
 
+    @Test
+    @Configuration("cache.options.merged.yaml")
+    @Specification({
+        "${app}/merged.produce.and.fetch.get.cleanup.policy/client",
+        "${app}/unmerged.produce.and.fetch.get.cleanup.policy/server"})
+    public void shouldProduceAndFetchMergedGetCompaction() throws Exception
+    {
+        k3po.finish();
+    }
+
     @Ignore("requires k3po parallel reads")
     @Test
     @Configuration("cache.options.merged.yaml")
@@ -238,6 +248,56 @@ public class CacheMergedIT
     }
 
     @Test
+    @Configuration("cache.options.convert.yaml")
+    @Specification({
+        "${app}/merged.fetch.message.value.convert/client",
+        "${app}/unmerged.fetch.message.value.convert/server"})
+    public void shouldFetchMergedMessageValueConvert() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.validate.yaml")
+    @Specification({
+        "${app}/merged.fetch.message.value.valid/client",
+        "${app}/unmerged.fetch.message.value.valid/server"})
+    public void shouldFetchMergedMessageValueValid() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.parameterized.topic.validate.yaml")
+    @Specification({
+        "${app}/merged.fetch.from.parameterized.topic.value.valid/client",
+        "${app}/unmerged.fetch.from.parameterized.topic.value.valid/server"})
+    public void shouldFetchMergedFromParameterizedTopicValid() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.parameterized.topic.validate.yaml")
+    @Specification({
+        "${app}/merged.fetch.from.parameterized.topic.value.invalid/client",
+        "${app}/unmerged.fetch.from.parameterized.topic.value.invalid/server"})
+    public void shouldFetchMergedFromParameterizedTopicInvalid() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.validate.yaml")
+    @Specification({
+        "${app}/merged.fetch.message.value.invalid/client",
+        "${app}/unmerged.fetch.message.value.invalid/server"})
+    public void shouldFetchMergedMessageValueInvalid() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
     @Configuration("cache.options.merged.yaml")
     @Specification({
         "${app}/merged.fetch.partition.leader.changed/client",
@@ -342,11 +402,41 @@ public class CacheMergedIT
     }
 
     @Test
+    @Configuration("cache.yaml")
+    @Specification({
+        "${app}/merged.produce.message.values.producer.id/client",
+        "${app}/unmerged.produce.message.values.producer.id/server"})
+    public void shouldProduceMergedMessageValuesWithProducerId() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.yaml")
+    @Specification({
+        "${app}/merged.produce.message.value.partition.id/client",
+        "${app}/unmerged.produce.message.value.partition.id/server"})
+    public void shouldProduceMergedMessageValueByGettingPartitionId() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
     @Configuration("cache.options.merged.yaml")
     @Specification({
         "${app}/merged.produce.message.values.null/client",
         "${app}/unmerged.produce.message.values.null/server"})
     public void shouldProduceMergedMessageValuesNull() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.client.options.validate.yaml")
+    @Specification({
+        "${app}/merged.produce.message.values.null/client",
+        "${app}/unmerged.produce.message.values.null/server"})
+    public void shouldProduceMergedMessageValuesNullWithModel() throws Exception
     {
         k3po.finish();
     }
@@ -494,7 +584,7 @@ public class CacheMergedIT
     @Test
     @Configuration("cache.options.merged.yaml")
     @Specification({
-        "${app}/merged.fetch.server.sent.abort/client",
+        "${app}/merged.fetch.server.sent.reset/client",
         "${app}/unmerged.fetch.server.sent.reset/server"})
     @Configure(name = KafkaConfigurationTest.KAFKA_CACHE_SERVER_RECONNECT_DELAY_NAME, value = "0")
     public void shouldCloseMergedOnUnmergedFetchReset() throws Exception
@@ -505,7 +595,7 @@ public class CacheMergedIT
     @Test
     @Configuration("cache.options.merged.yaml")
     @Specification({
-        "${app}/merged.fetch.server.sent.abort.with.message/client",
+        "${app}/merged.fetch.server.sent.reset.with.message/client",
         "${app}/unmerged.fetch.server.sent.reset.and.abort.with.message/server"})
     @Configure(name = KafkaConfigurationTest.KAFKA_CACHE_SERVER_RECONNECT_DELAY_NAME, value = "0")
     public void shouldCloseMergedOnUnmergedFetchResetWithMessage() throws Exception
@@ -630,6 +720,26 @@ public class CacheMergedIT
         "${app}/merged.fetch.message.ack/client",
         "${app}/unmerged.group.fetch.message.ack/server"})
     public void shouldAckMessageOffset() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.merged.yaml")
+    @Specification({
+        "${app}/merged.fetch.unsubscribe/client",
+        "${app}/unmerged.group.fetch.unsubscribe/server"})
+    public void shouldUnsubscribeOnPartitionReassignment() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configuration("cache.options.merged.yaml")
+    @Specification({
+        "${app}/merged.fetch.unsubscribe/client",
+        "${app}unmerged.group.fetch.assignment.incomplete/server"})
+    public void shouldCancelPreviousIncompleteOffsetFetchRequest() throws Exception
     {
         k3po.finish();
     }

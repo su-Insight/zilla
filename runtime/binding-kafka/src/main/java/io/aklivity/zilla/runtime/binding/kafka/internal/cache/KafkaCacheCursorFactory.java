@@ -54,10 +54,14 @@ import io.aklivity.zilla.runtime.binding.kafka.internal.types.KafkaValueMatchFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.OctetsFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.cache.KafkaCacheDeltaFW;
 import io.aklivity.zilla.runtime.binding.kafka.internal.types.cache.KafkaCacheEntryFW;
+import io.aklivity.zilla.runtime.binding.kafka.internal.types.cache.KafkaCachePaddedValueFW;
 
 public final class KafkaCacheCursorFactory
 {
+    private static final int NO_CONVERTED_POSITION = -1;
+
     private final KafkaCacheDeltaFW deltaRO = new KafkaCacheDeltaFW();
+    private final KafkaCachePaddedValueFW convertedRO = new KafkaCachePaddedValueFW();
     private final KafkaValueMatchFW valueMatchRO = new KafkaValueMatchFW();
     private final KafkaHeaderFW headerRO = new KafkaHeaderFW();
 
@@ -68,9 +72,9 @@ public final class KafkaCacheCursorFactory
     public static final int INDEX_UNSET = -1;
 
     public KafkaCacheCursorFactory(
-        MutableDirectBuffer writeBuffer)
+        int writeCapacity)
     {
-        this.writeBuffer = writeBuffer;
+        this.writeBuffer = new UnsafeBuffer(ByteBuffer.allocate(writeCapacity));
         this.checksum = new CRC32C();
     }
 
@@ -122,23 +126,26 @@ public final class KafkaCacheCursorFactory
             this.latestOffset = latestOffset;
 
             assert !segmentNode.sentinel();
-            KafkaCacheSegment newSegment = null;
-            while (newSegment == null)
+            if (segmentNode.segment() != null)
             {
-                newSegment = segmentNode.segment().acquire();
-                if (newSegment == null)
+                KafkaCacheSegment newSegment = null;
+                while (newSegment == null)
                 {
-                    segmentNode = segmentNode.next();
+                    newSegment = segmentNode.segment().acquire();
+                    if (newSegment == null)
+                    {
+                        segmentNode = segmentNode.next();
+                    }
                 }
+                this.segmentNode = segmentNode;
+                this.segment = newSegment;
+
+                assert this.segmentNode != null;
+                assert this.segment != null;
+
+                final int position = condition.reset(segment, offset, latestOffset, POSITION_UNSET);
+                this.position = position == RETRY_SEGMENT_VALUE || position == NEXT_SEGMENT_VALUE ? 0 : position;
             }
-            this.segmentNode = segmentNode;
-            this.segment = newSegment;
-
-            assert this.segmentNode != null;
-            assert this.segment != null;
-
-            final int position = condition.reset(segment, offset, latestOffset, POSITION_UNSET);
-            this.position = position == RETRY_SEGMENT_VALUE || position == NEXT_SEGMENT_VALUE ? 0 : position;
         }
 
         public KafkaCacheEntryFW next(
@@ -147,7 +154,7 @@ public final class KafkaCacheCursorFactory
             KafkaCacheEntryFW nextEntry = null;
 
             next:
-            while (nextEntry == null)
+            while (segmentNode != null && nextEntry == null)
             {
                 final int positionNext = condition.next(position);
                 if (positionNext == RETRY_SEGMENT_VALUE)
@@ -212,9 +219,16 @@ public final class KafkaCacheCursorFactory
                     nextEntry = null;
                 }
 
-                if (nextEntry != null && deltaType != KafkaDeltaType.NONE)
+                if (nextEntry != null)
                 {
-                    nextEntry = markAncestorIfNecessary(cacheEntry, nextEntry);
+                    if (deltaType != KafkaDeltaType.NONE)
+                    {
+                        nextEntry = markAncestorIfNecessary(cacheEntry, nextEntry);
+                    }
+                    else if (nextEntry.convertedPosition() != NO_CONVERTED_POSITION)
+                    {
+                        nextEntry = nextConvertedEntry(cacheEntry, nextEntry);
+                    }
                 }
 
                 if (nextEntry == null)
@@ -289,6 +303,41 @@ public final class KafkaCacheCursorFactory
             return nextEntry;
         }
 
+        private KafkaCacheEntryFW nextConvertedEntry(
+            KafkaCacheEntryFW cacheEntry,
+            KafkaCacheEntryFW nextEntry)
+        {
+            final int convertedAt = nextEntry.convertedPosition();
+            assert convertedAt != NO_CONVERTED_POSITION;
+
+            final KafkaCacheFile convertedFile = segment.convertedFile();
+            final KafkaCachePaddedValueFW converted = convertedFile.readBytes(convertedAt, convertedRO::wrap);
+            final OctetsFW convertedValue = converted.value();
+            final DirectBuffer entryBuffer = nextEntry.buffer();
+            final KafkaKeyFW key = nextEntry.key();
+            final int entryOffset = nextEntry.offset();
+            final ArrayFW<KafkaHeaderFW> headers = nextEntry.headers();
+            final ArrayFW<KafkaHeaderFW> trailers = nextEntry.trailers();
+
+            final int sizeofEntryHeader = key.limit() - nextEntry.offset();
+
+            int writeLimit = 0;
+            writeBuffer.putBytes(writeLimit, entryBuffer, entryOffset, sizeofEntryHeader);
+            writeLimit += sizeofEntryHeader;
+            writeBuffer.putInt(writeLimit, convertedValue.sizeof());
+            writeLimit += Integer.BYTES;
+            writeBuffer.putBytes(writeLimit, convertedValue.buffer(), convertedValue.offset(), convertedValue.sizeof());
+            writeLimit += convertedValue.sizeof();
+            writeBuffer.putBytes(writeLimit, headers.buffer(), headers.offset(), headers.sizeof());
+            writeLimit += headers.sizeof();
+            writeBuffer.putBytes(writeLimit, trailers.buffer(), trailers.offset(), trailers.sizeof());
+            writeLimit += trailers.sizeof();
+            writeBuffer.putInt(writeLimit, 0);
+            writeLimit += Integer.BYTES;
+
+            return cacheEntry.wrap(writeBuffer, 0, writeLimit);
+        }
+
         public void advance(
             long offset)
         {
@@ -299,30 +348,33 @@ public final class KafkaCacheCursorFactory
             assert segmentNode != null;
             assert segment != null;
 
-            KafkaCacheSegment newSegment = segmentNode.segment();
-            if (segment != newSegment)
+            if (segmentNode != null)
             {
-                segment.release();
-
-                Node newSegmentNode = segmentNode;
-                newSegment = newSegment.acquire();
-                while (newSegment == null)
+                KafkaCacheSegment newSegment = segmentNode.segment();
+                if (segment != newSegment)
                 {
-                    newSegment = newSegmentNode.segment().acquire();
-                    if (newSegment == null)
+                    segment.release();
+
+                    Node newSegmentNode = segmentNode;
+                    newSegment = newSegment.acquire();
+                    while (newSegment == null)
                     {
-                        newSegmentNode = newSegmentNode.next();
+                        newSegment = newSegmentNode.segment().acquire();
+                        if (newSegment == null)
+                        {
+                            newSegmentNode = newSegmentNode.next();
+                        }
                     }
+                    this.segmentNode = newSegmentNode;
+                    this.segment = newSegment;
+
+                    assert segmentNode != null;
+                    assert !segmentNode.sentinel();
+                    assert segment != null;
+
+                    final int position = condition.reset(segment, offset, latestOffset, POSITION_UNSET);
+                    this.position = position == RETRY_SEGMENT_VALUE || position == NEXT_SEGMENT_VALUE ? 0 : position;
                 }
-                this.segmentNode = newSegmentNode;
-                this.segment = newSegment;
-
-                assert segmentNode != null;
-                assert !segmentNode.sentinel();
-                assert segment != null;
-
-                final int position = condition.reset(segment, offset, latestOffset, POSITION_UNSET);
-                this.position = position == RETRY_SEGMENT_VALUE || position == NEXT_SEGMENT_VALUE ? 0 : position;
             }
         }
 

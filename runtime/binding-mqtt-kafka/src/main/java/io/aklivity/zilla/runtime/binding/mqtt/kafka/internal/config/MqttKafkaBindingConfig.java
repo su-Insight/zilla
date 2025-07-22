@@ -14,6 +14,7 @@
  */
 package io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.config;
 
+import static io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.MqttQoS.AT_LEAST_ONCE;
 import static java.util.stream.Collectors.toList;
 
 import java.util.ArrayList;
@@ -23,9 +24,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaConditionKind;
+import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaOptionsConfig;
+import io.aklivity.zilla.runtime.binding.mqtt.kafka.config.MqttKafkaRouteConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.stream.MqttKafkaSessionFactory;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.Array32FW;
+import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.MqttQoS;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.MqttTopicFilterFW;
 import io.aklivity.zilla.runtime.binding.mqtt.kafka.internal.types.String16FW;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
@@ -90,6 +95,12 @@ public class MqttKafkaBindingConfig
             .filter(r -> r.authorized(authorization) &&
                 filters.anyMatch(f -> r.matches(f.pattern().asString(), MqttKafkaConditionKind.SUBSCRIBE)))
             .collect(Collectors.toList());
+    }
+
+    public MqttQoS publishQosMax()
+    {
+        return routes.stream().noneMatch(r -> r.with != null && r.with.containsParams()) ?
+            options.publish.qosMax : AT_LEAST_ONCE;
     }
 
     public String16FW messagesTopic()

@@ -15,6 +15,9 @@
  */
 package io.aklivity.zilla.runtime.engine.internal.registry;
 
+import static java.util.stream.Collectors.toList;
+import static org.agrona.LangUtil.rethrowUnchecked;
+
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,6 +41,7 @@ import io.aklivity.zilla.runtime.engine.EngineConfiguration;
 import io.aklivity.zilla.runtime.engine.binding.Binding;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.CatalogConfig;
+import io.aklivity.zilla.runtime.engine.config.CatalogedConfig;
 import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
 import io.aklivity.zilla.runtime.engine.config.ConfigException;
 import io.aklivity.zilla.runtime.engine.config.EngineConfig;
@@ -48,18 +52,18 @@ import io.aklivity.zilla.runtime.engine.config.GuardedConfig;
 import io.aklivity.zilla.runtime.engine.config.KindConfig;
 import io.aklivity.zilla.runtime.engine.config.MetricConfig;
 import io.aklivity.zilla.runtime.engine.config.MetricRefConfig;
+import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
 import io.aklivity.zilla.runtime.engine.config.RouteConfig;
 import io.aklivity.zilla.runtime.engine.config.TelemetryRefConfig;
 import io.aklivity.zilla.runtime.engine.config.VaultConfig;
-import io.aklivity.zilla.runtime.engine.expression.ExpressionResolver;
 import io.aklivity.zilla.runtime.engine.ext.EngineExtContext;
 import io.aklivity.zilla.runtime.engine.ext.EngineExtSpi;
 import io.aklivity.zilla.runtime.engine.guard.Guard;
 import io.aklivity.zilla.runtime.engine.internal.Tuning;
 import io.aklivity.zilla.runtime.engine.internal.config.NamespaceAdapter;
-import io.aklivity.zilla.runtime.engine.internal.layouts.BindingsLayout;
-import io.aklivity.zilla.runtime.engine.internal.stream.NamespacedId;
+import io.aklivity.zilla.runtime.engine.namespace.NamespacedId;
+import io.aklivity.zilla.runtime.engine.resolver.Resolver;
 
 public class EngineManager
 {
@@ -69,16 +73,16 @@ public class EngineManager
     private final Function<String, Binding> bindingByType;
     private final Function<String, Guard> guardByType;
     private final ToIntFunction<String> supplyId;
+    private final IntFunction<String> supplyName;
     private final IntFunction<ToIntFunction<KindConfig>> maxWorkers;
     private final Tuning tuning;
-    private final Collection<EngineWorker> dispatchers;
+    private final Collection<EngineWorker> workers;
     private final Consumer<String> logger;
     private final EngineExtContext context;
     private final EngineConfiguration config;
     private final List<EngineExtSpi> extensions;
     private final BiFunction<URL, String, String> readURL;
-    private final ExpressionResolver expressions;
-    private final Matcher matchName;
+    private final Resolver expressions;
 
     private EngineConfig current;
 
@@ -87,9 +91,10 @@ public class EngineManager
         Function<String, Binding> bindingByType,
         Function<String, Guard> guardByType,
         ToIntFunction<String> supplyId,
+        IntFunction<String> supplyName,
         IntFunction<ToIntFunction<KindConfig>> maxWorkers,
         Tuning tuning,
-        Collection<EngineWorker> dispatchers,
+        Collection<EngineWorker> workers,
         Consumer<String> logger,
         EngineExtContext context,
         EngineConfiguration config,
@@ -100,16 +105,16 @@ public class EngineManager
         this.bindingByType = bindingByType;
         this.guardByType = guardByType;
         this.supplyId = supplyId;
+        this.supplyName = supplyName;
         this.maxWorkers = maxWorkers;
         this.tuning = tuning;
-        this.dispatchers = dispatchers;
+        this.workers = workers;
         this.logger = logger;
         this.context = context;
         this.config = config;
         this.extensions = extensions;
         this.readURL = readURL;
-        this.expressions = ExpressionResolver.instantiate();
-        this.matchName = NamespaceAdapter.PATTERN_NAME.matcher("");
+        this.expressions = Resolver.instantiate(config);
     }
 
     public EngineConfig reconfigure(
@@ -128,17 +133,17 @@ public class EngineManager
 
                 try
                 {
-                    writeBindingsLayout(newConfig);
-                    register(newConfig);
                     current = newConfig;
+                    register(newConfig);
                 }
                 catch (Exception ex)
                 {
                     context.onError(ex);
-                    writeBindingsLayout(newConfig);
+
+                    current = oldConfig;
                     register(oldConfig);
 
-                    LangUtil.rethrowUnchecked(ex);
+                    rethrowUnchecked(ex);
                 }
             }
         }
@@ -151,11 +156,22 @@ public class EngineManager
 
             if (current == null)
             {
-                throw new ConfigException("Engine configuration failed");
+                throw new ConfigException("Engine configuration failed", ex);
             }
         }
 
         return newConfig;
+    }
+
+    public void process(
+        NamespaceConfig namespace)
+    {
+        final List<GuardConfig> guards = current.namespaces.stream()
+                .map(n -> n.guards)
+                .flatMap(gs -> gs.stream())
+                .collect(toList());
+
+        process(guards, namespace);
     }
 
     private EngineConfig parse(
@@ -176,16 +192,23 @@ public class EngineManager
             final Function<String, String> namespaceReadURL = l -> readURL.apply(configURL, l);
 
             EngineConfigReader reader = new EngineConfigReader(
+                config,
                 new NamespaceConfigAdapterContext(namespaceReadURL),
                 expressions,
                 schemaTypes,
-                config.verboseSchema() ? logger : null);
+                logger);
 
             engine = reader.read(configText);
 
+            final List<GuardConfig> guards = engine.namespaces.stream()
+                .map(n -> n.guards)
+                .flatMap(gs -> gs.stream())
+                .collect(toList());
+
             for (NamespaceConfig namespace : engine.namespaces)
             {
-                process(namespace, namespaceReadURL);
+                namespace.readURL = l -> readURL.apply(configURL, l);
+                process(guards, namespace);
             }
         }
         catch (Throwable ex)
@@ -197,11 +220,12 @@ public class EngineManager
     }
 
     private void process(
-        NamespaceConfig namespace,
-        Function<String, String> readURL)
+        List<GuardConfig> guards,
+        NamespaceConfig namespace)
     {
+        assert namespace.readURL != null;
+
         namespace.id = supplyId.applyAsInt(namespace.name);
-        namespace.readURL = readURL;
 
         NameResolver resolver = new NameResolver(namespace.id);
 
@@ -229,6 +253,10 @@ public class EngineManager
         for (ExporterConfig exporter : namespace.telemetry.exporters)
         {
             exporter.id = resolver.resolve(exporter.name);
+            if (exporter.vault != null)
+            {
+                exporter.vaultId = resolver.resolve(exporter.vault);
+            }
         }
 
         for (BindingConfig binding : namespace.bindings)
@@ -236,10 +264,43 @@ public class EngineManager
             binding.id = resolver.resolve(binding.name);
             binding.entryId = resolver.resolve(binding.entry);
             binding.resolveId = resolver::resolve;
+            binding.readURL = namespace.readURL;
+
+            binding.typeId = supplyId.applyAsInt(binding.type);
+            binding.kindId = supplyId.applyAsInt(binding.kind.name().toLowerCase());
+
+            Binding typed = bindingByType.apply(binding.type);
+            String originType = typed.originType(binding.kind);
+            String routedType = typed.routedType(binding.kind);
+            binding.originTypeId = originType != null ? supplyId.applyAsInt(originType) : 0L;
+            binding.routedTypeId = routedType != null ? supplyId.applyAsInt(routedType) : 0L;
 
             if (binding.vault != null)
             {
                 binding.vaultId = resolver.resolve(binding.vault);
+                binding.qvault = resolver.format(binding.vaultId);
+            }
+
+            if (binding.catalogs != null)
+            {
+                for (CatalogedConfig cataloged : binding.catalogs)
+                {
+                    cataloged.id = resolver.resolve(cataloged.name);
+                }
+            }
+
+            if (binding.options != null)
+            {
+                for (ModelConfig model : binding.options.models)
+                {
+                    if (model.cataloged != null)
+                    {
+                        for (CatalogedConfig cataloged : model.cataloged)
+                        {
+                            cataloged.id = resolver.resolve(cataloged.name);
+                        }
+                    }
+                }
             }
 
             for (RouteConfig route : binding.routes)
@@ -253,14 +314,14 @@ public class EngineManager
                     {
                         guarded.id = resolver.resolve(guarded.name);
 
-                        LongPredicate authorizer = namespace.guards.stream()
+                        LongPredicate authorizer = guards.stream()
                             .filter(g -> g.id == guarded.id)
                             .findFirst()
                             .map(g -> guardByType.apply(g.type))
                             .map(g -> g.verifier(EngineWorker::indexOfId, guarded))
                             .orElse(session -> false);
 
-                        LongFunction<String> identifier = namespace.guards.stream()
+                        LongFunction<String> identifier = guards.stream()
                             .filter(g -> g.id == guarded.id)
                             .findFirst()
                             .map(g -> guardByType.apply(g.type))
@@ -268,6 +329,7 @@ public class EngineManager
                             .orElse(session -> null);
 
                         guarded.identity = identifier;
+                        guarded.qname = resolver.format(guarded.id);
 
                         route.authorized = route.authorized.and(authorizer);
                     }
@@ -295,11 +357,6 @@ public class EngineManager
             }
             binding.metricIds = metricIds.stream().mapToLong(Long::longValue).toArray();
 
-            for (NamespaceConfig composite : binding.composites)
-            {
-                process(composite, readURL);
-            }
-
             long affinity = tuning.affinity(binding.id);
 
             final long maxbits = maxWorkers.apply(binding.type.intern().hashCode()).applyAsInt(binding.kind);
@@ -322,6 +379,8 @@ public class EngineManager
                 register(namespace);
             }
         }
+
+        extensions.forEach(e -> e.onRegistered(context));
     }
 
     private void unregister(
@@ -334,16 +393,17 @@ public class EngineManager
                 unregister(namespace);
             }
         }
+
+        extensions.forEach(e -> e.onUnregistered(context));
     }
 
     private void register(
         NamespaceConfig namespace)
     {
-        dispatchers.stream()
-            .map(d -> d.attach(namespace))
+        workers.stream()
+            .map(w -> w.attach(namespace))
             .reduce(CompletableFuture::allOf)
             .ifPresent(CompletableFuture::join);
-        extensions.forEach(e -> e.onRegistered(context));
     }
 
     private void unregister(
@@ -351,55 +411,30 @@ public class EngineManager
     {
         if (namespace != null)
         {
-            dispatchers.stream()
-                .map(d -> d.detach(namespace))
+            workers.stream()
+                .map(w -> w.detach(namespace))
                 .reduce(CompletableFuture::allOf)
                 .ifPresent(CompletableFuture::join);
-            extensions.forEach(e -> e.onUnregistered(context));
-        }
-    }
-
-    private void writeBindingsLayout(
-        EngineConfig engine)
-    {
-        try (BindingsLayout layout = BindingsLayout.builder()
-                .directory(config.directory())
-                .build())
-        {
-            for (NamespaceConfig namespace : engine.namespaces)
-            {
-                for (BindingConfig binding : namespace.bindings)
-                {
-                    long typeId = binding.resolveId.applyAsLong(binding.type);
-                    long kindId = binding.resolveId.applyAsLong(binding.kind.name().toLowerCase());
-                    Binding typed = bindingByType.apply(binding.type);
-                    long originTypeId = binding.resolveId.applyAsLong(typed.originType(binding.kind));
-                    long routedTypeId = binding.resolveId.applyAsLong(typed.routedType(binding.kind));
-                    layout.writeBindingInfo(binding.id, typeId, kindId, originTypeId, routedTypeId);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LangUtil.rethrowUnchecked(ex);
         }
     }
 
     private final class NameResolver
     {
         private final int namespaceId;
+        private final ThreadLocal<Matcher> matchName;
 
         private NameResolver(
             int namespaceId)
         {
             this.namespaceId = namespaceId;
+            this.matchName = ThreadLocal.withInitial(() -> NamespaceAdapter.PATTERN_NAME.matcher(""));
         }
 
         private long resolve(
             String name)
         {
             long id = 0L;
-
+            Matcher matchName = this.matchName.get();
             if (name != null && matchName.reset(name).matches())
             {
                 String ns = matchName.group("namespace");
@@ -410,8 +445,15 @@ public class EngineManager
 
                 id = NamespacedId.id(nsid, nid);
             }
-
             return id;
+        }
+
+        private String format(
+            long namespacedId)
+        {
+            return String.format("%s:%s",
+                    supplyName.apply(NamespacedId.namespaceId(namespacedId)),
+                    supplyName.apply(NamespacedId.localId(namespacedId)));
         }
     }
 

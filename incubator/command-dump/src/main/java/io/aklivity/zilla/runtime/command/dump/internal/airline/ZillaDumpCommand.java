@@ -191,7 +191,7 @@ public final class ZillaDumpCommand extends ZillaCommand
         hidden = true)
     public boolean exceptions;
 
-    boolean continuous = true;
+    public boolean continuous = true;
 
     private final FrameFW frameRO = new FrameFW();
     private final BeginFW beginRO = new BeginFW();
@@ -217,6 +217,8 @@ public final class ZillaDumpCommand extends ZillaCommand
     private final TcpHeaderFW.Builder tcpHeaderRW = new TcpHeaderFW.Builder();
     private final MutableDirectBuffer patchBuffer;
     private final MutableDirectBuffer writeBuffer;
+    private int minWorkerIndex;
+    private long minTimeStamp;
 
     private Path directory;
 
@@ -314,7 +316,9 @@ public final class ZillaDumpCommand extends ZillaCommand
                 final int streamBufferCount = streamBuffers.length;
 
                 final IdleStrategy idleStrategy = new BackoffIdleStrategy(MAX_SPINS, MAX_YIELDS, MIN_PARK_NS, MAX_PARK_NS);
-                final BindingsLayoutReader bindings = BindingsLayoutReader.builder().directory(directory).build();
+                final BindingsLayoutReader bindings = BindingsLayoutReader.builder()
+                    .path(directory.resolve("bindings"))
+                    .build();
                 final DumpHandler[] dumpHandlers = new DumpHandler[streamBufferCount];
                 for (int i = 0; i < streamBufferCount; i++)
                 {
@@ -330,11 +334,26 @@ public final class ZillaDumpCommand extends ZillaCommand
                 do
                 {
                     workCount = 0;
-                    for (int i = 0; i < streamBufferCount; i++)
+                    minWorkerIndex = 0;
+                    minTimeStamp = Long.MAX_VALUE;
+                    int framesPeeked = 0;
+                    for (int j = 0; j < streamBufferCount; j++)
                     {
-                        final RingBufferSpy streamBuffer = streamBuffers[i];
-                        MessagePredicate spyHandler = dumpHandlers[i]::handleFrame;
-                        workCount += streamBuffer.spy(spyHandler, 1);
+                        final int workerIndex = j;
+                        framesPeeked += streamBuffers[workerIndex].peek((m, b, i, l) ->
+                        {
+                            frameRO.wrap(b, i, i + l);
+                            if (frameRO.timestamp() < minTimeStamp)
+                            {
+                                minTimeStamp = frameRO.timestamp();
+                                minWorkerIndex = workerIndex;
+                            }
+                        });
+                    }
+                    if (framesPeeked > 0)
+                    {
+                        MessagePredicate spyHandler = dumpHandlers[minWorkerIndex]::handleFrame;
+                        workCount += streamBuffers[minWorkerIndex].spy(spyHandler, 1);
                     }
                     idleStrategy.idle(workCount);
                 } while (workCount != exitWorkCount);

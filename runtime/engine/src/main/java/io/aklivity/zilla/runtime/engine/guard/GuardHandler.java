@@ -30,6 +30,8 @@ public interface GuardHandler
      * @return  the session identifier
      */
     long reauthorize(
+        long traceId,
+        long bindingId,
         long contextId,
         String credentials);
 
@@ -49,6 +51,16 @@ public interface GuardHandler
      * @return  the authorized identity
      */
     String identity(
+        long sessionId);
+
+    /*
+     * Returns the authorized credentials.
+     *
+     * @param sessionId     the session identifier
+     *
+     * @return  the authorized credentials
+     */
+    String credentials(
         long sessionId);
 
     /*

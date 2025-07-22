@@ -27,10 +27,18 @@ public class BindingConfig
     public transient long id;
     public transient long entryId;
     public transient ToLongFunction<String> resolveId;
+    public transient Function<String, String> readURL;
 
     public transient long vaultId;
+    public transient String qvault;
 
     public transient long[] metricIds;
+
+    public transient long typeId;
+    public transient long kindId;
+
+    public transient long originTypeId;
+    public transient long routedTypeId;
 
     public final String namespace;
     public final String name;
@@ -40,9 +48,9 @@ public class BindingConfig
     public final String entry;
     public final String vault;
     public final OptionsConfig options;
+    public final List<CatalogedConfig> catalogs;
     public final List<RouteConfig> routes;
     public final TelemetryRefConfig telemetryRef;
-    public final List<NamespaceConfig> composites;
 
     public static BindingConfigBuilder<BindingConfig> builder()
     {
@@ -66,9 +74,9 @@ public class BindingConfig
             .kind(binding.kind)
             .entry(binding.entry)
             .options(binding.options)
+            .catalogs(binding.catalogs)
             .routes(binding.routes)
-            .telemetry(binding.telemetryRef)
-            .composites(binding.composites);
+            .telemetry(binding.telemetryRef);
     }
 
     BindingConfig(
@@ -79,9 +87,9 @@ public class BindingConfig
         String entry,
         String vault,
         OptionsConfig options,
+        List<CatalogedConfig> catalogs,
         List<RouteConfig> routes,
-        TelemetryRefConfig telemetryRef,
-        List<NamespaceConfig> namespaces)
+        TelemetryRefConfig telemetryRef)
     {
         this.namespace = requireNonNull(namespace);
         this.name = requireNonNull(name);
@@ -92,7 +100,7 @@ public class BindingConfig
         this.vault = vault;
         this.options = options;
         this.routes = routes;
+        this.catalogs = catalogs;
         this.telemetryRef = telemetryRef;
-        this.composites = namespaces;
     }
 }

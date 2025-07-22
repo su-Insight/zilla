@@ -17,8 +17,13 @@ package io.aklivity.zilla.runtime.binding.mqtt.internal.config;
 
 import static java.util.stream.Collectors.toList;
 
+import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
 import java.util.regex.Matcher;
@@ -29,23 +34,29 @@ import io.aklivity.zilla.runtime.binding.mqtt.config.MqttCredentialsConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttOptionsConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttPatternConfig;
 import io.aklivity.zilla.runtime.binding.mqtt.config.MqttPatternConfig.MqttConnectProperty;
+import io.aklivity.zilla.runtime.binding.mqtt.internal.types.String16FW;
 import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.KindConfig;
-import io.aklivity.zilla.runtime.engine.validator.Validator;
+import io.aklivity.zilla.runtime.engine.config.ModelConfig;
+import io.aklivity.zilla.runtime.engine.guard.GuardHandler;
 
 public final class MqttBindingConfig
 {
     private static final Function<String, String> DEFAULT_CREDENTIALS = x -> null;
+    private static final List<MqttVersion> DEFAULT_VERSIONS = Arrays.asList(MqttVersion.V3_1_1, MqttVersion.V_5);
 
     public final long id;
     public final String name;
     public final KindConfig kind;
     public final MqttOptionsConfig options;
     public final List<MqttRouteConfig> routes;
-    public final Function<String, String> credentials;
-    public final Map<String, Validator> topics;
+    public final Function<String, String> resolveCredentials;
+    public final Function<String, String> injectCredentials;
+    public final Map<Matcher, TopicValidator> topics;
+    public final List<MqttVersion> versions;
     public final ToLongFunction<String> resolveId;
+    public final GuardHandler guard;
 
     public MqttBindingConfig(
         BindingConfig binding,
@@ -57,13 +68,30 @@ public final class MqttBindingConfig
         this.routes = binding.routes.stream().map(MqttRouteConfig::new).collect(toList());
         this.options = (MqttOptionsConfig) binding.options;
         this.resolveId = binding.resolveId;
-        this.credentials = options != null && options.authorization != null ?
+        this.resolveCredentials = options != null && options.authorization != null ?
             asAccessor(options.authorization.credentials) : DEFAULT_CREDENTIALS;
-        this.topics = options != null &&
-            options.topics != null
-            ? options.topics.stream()
-            .collect(Collectors.toMap(t -> t.name,
-                t -> context.createValidator(t.content, resolveId))) : null;
+        this.injectCredentials = options != null && options.authorization != null ?
+            asInjector(options.authorization.credentials) : DEFAULT_CREDENTIALS;
+        this.topics = new HashMap<>();
+        if (options != null && options.topics != null)
+        {
+            options.topics.forEach(t ->
+            {
+                String topicPattern = t.name.replace(".", "\\.")
+                    .replace("$", "\\$")
+                    .replace("+", "[^/]*")
+                    .replace("#", ".*");
+                Map<String16FW, ModelConfig> userProperties =
+                    Optional.ofNullable(t.userProperties).orElseGet(Collections::emptyList)
+                    .stream()
+                    .collect(Collectors.toMap(up -> new String16FW(up.name, ByteOrder.BIG_ENDIAN), up -> up.value));
+                topics.put(Pattern.compile(topicPattern).matcher(""), new TopicValidator(t.content, userProperties));
+            });
+        }
+
+        this.guard = resolveGuard(context);
+        this.versions = options != null &&
+            options.versions != null ? options.versions : DEFAULT_VERSIONS;
     }
 
     public MqttRouteConfig resolve(
@@ -105,15 +133,80 @@ public final class MqttBindingConfig
             .orElse(null);
     }
 
-    public Function<String, String> credentials()
+    public ModelConfig supplyModelConfig(
+        String topic)
     {
-        return credentials;
+        ModelConfig config = null;
+        if (topics != null)
+        {
+            for (Map.Entry<Matcher, TopicValidator> t : topics.entrySet())
+            {
+                final Matcher matcher = t.getKey();
+                matcher.reset(topic);
+                if (matcher.find())
+                {
+                    config = t.getValue().content;
+                    break;
+                }
+            }
+        }
+        return config;
+    }
+
+    public ModelConfig supplyUserPropertyModelConfig(
+        String topic,
+        String16FW userPropertyKey)
+    {
+        ModelConfig config = null;
+        if (topics != null)
+        {
+            for (Map.Entry<Matcher, TopicValidator> t : topics.entrySet())
+            {
+                final Matcher matcher = t.getKey();
+                matcher.reset(topic);
+                if (matcher.find())
+                {
+                    Map<String16FW, ModelConfig> userProperties = t.getValue().userProperties;
+                    if (userProperties != null)
+                    {
+                        config = userProperties.get(userPropertyKey);
+                    }
+                    break;
+                }
+            }
+        }
+        return config;
+    }
+
+    public Function<String, String> resolveCredentials()
+    {
+        return resolveCredentials;
+    }
+
+    public Function<String, String> injectCredentials()
+    {
+        return injectCredentials;
     }
 
     public MqttConnectProperty authField()
     {
         return options != null && options.authorization != null ?
             options.authorization.credentials.connect.get(0).property : null;
+    }
+
+    private GuardHandler resolveGuard(
+        EngineContext context)
+    {
+        GuardHandler guard = null;
+
+        if (options != null &&
+            options.authorization != null)
+        {
+            long guardId = resolveId.applyAsLong(options.authorization.name);
+            guard = context.supplyGuard(guardId);
+        }
+
+        return guard;
     }
 
     private Function<String, String> asAccessor(
@@ -130,7 +223,7 @@ public final class MqttBindingConfig
                 Pattern.compile(config.pattern.replace("{credentials}", "(?<credentials>[^\\s]+)"))
                     .matcher("");
 
-            accessor = orElseIfNull(accessor, connect ->
+            accessor = connect ->
             {
                 String result = null;
                 if (connect != null && connectMatch.reset(connect).matches())
@@ -138,20 +231,47 @@ public final class MqttBindingConfig
                     result = connectMatch.group("credentials");
                 }
                 return result;
-            });
+            };
         }
 
         return accessor;
     }
 
-    private static Function<String, String> orElseIfNull(
-        Function<String, String> first,
-        Function<String, String> second)
+    private Function<String, String> asInjector(
+        MqttCredentialsConfig credentials)
     {
-        return x ->
+        Function<String, String> injector = DEFAULT_CREDENTIALS;
+        List<MqttPatternConfig> connectPatterns = credentials.connect;
+
+        if (connectPatterns != null && !connectPatterns.isEmpty())
         {
-            String result = first.apply(x);
-            return result != null ? result : second.apply(x);
-        };
+            MqttPatternConfig config = connectPatterns.get(0);
+
+            injector = connect ->
+            {
+                String result = null;
+                if (connect != null)
+                {
+                    result = config.pattern.replace("{credentials}", connect);
+                }
+                return result;
+            };
+        }
+
+        return injector;
+    }
+
+    private static class TopicValidator
+    {
+        ModelConfig content;
+        Map<String16FW, ModelConfig> userProperties;
+
+        TopicValidator(
+            ModelConfig content,
+            Map<String16FW, ModelConfig> userProperties)
+        {
+            this.content = content;
+            this.userProperties = userProperties;
+        }
     }
 }

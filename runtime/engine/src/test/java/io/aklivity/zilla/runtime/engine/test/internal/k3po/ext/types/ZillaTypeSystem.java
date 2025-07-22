@@ -30,6 +30,7 @@ public final class ZillaTypeSystem implements TypeSystemSpi
 {
     public static final String NAME = "zilla";
 
+    public static final TypeInfo<String> OPTION_EPHEMERAL = new TypeInfo<>("ephemeral", String.class);
     public static final TypeInfo<String> OPTION_REPLY_TO = new TypeInfo<>("replyTo", String.class);
     public static final TypeInfo<Integer> OPTION_WINDOW = new TypeInfo<>("window", Integer.class);
     public static final TypeInfo<Integer> OPTION_SHARED_WINDOW = new TypeInfo<>("sharedWindow", Integer.class);
@@ -44,6 +45,7 @@ public final class ZillaTypeSystem implements TypeSystemSpi
     public static final TypeInfo<String> OPTION_ALIGNMENT = new TypeInfo<>("alignment", String.class);
     public static final TypeInfo<Long> OPTION_AFFINITY = new TypeInfo<>("affinity", Long.class);
     public static final TypeInfo<Byte> OPTION_CAPABILITIES = new TypeInfo<>("capabilities", Byte.class);
+    public static final TypeInfo<String> OPTION_TIMESTAMPS = new TypeInfo<>("timestamps", String.class);
     public static final TypeInfo<Integer> OPTION_FLAGS = new TypeInfo<>("flags", Integer.class);
     public static final TypeInfo<Integer> OPTION_ACK = new TypeInfo<>("ack", Integer.class);
 
@@ -92,9 +94,11 @@ public final class ZillaTypeSystem implements TypeSystemSpi
         acceptOptions.add(OPTION_BYTE_ORDER);
         acceptOptions.add(OPTION_ALIGNMENT);
         acceptOptions.add(OPTION_CAPABILITIES);
+        acceptOptions.add(OPTION_TIMESTAMPS);
         this.acceptOptions = unmodifiableSet(acceptOptions);
 
         Set<TypeInfo<?>> connectOptions = new LinkedHashSet<>();
+        connectOptions.add(OPTION_EPHEMERAL);
         connectOptions.add(OPTION_REPLY_TO);
         connectOptions.add(OPTION_WINDOW);
         connectOptions.add(OPTION_SHARED_WINDOW);
@@ -109,6 +113,7 @@ public final class ZillaTypeSystem implements TypeSystemSpi
         connectOptions.add(OPTION_ALIGNMENT);
         connectOptions.add(OPTION_AFFINITY);
         connectOptions.add(OPTION_CAPABILITIES);
+        connectOptions.add(OPTION_TIMESTAMPS);
         this.connectOptions = unmodifiableSet(connectOptions);
 
         Set<TypeInfo<?>> readOptions = new LinkedHashSet<>();

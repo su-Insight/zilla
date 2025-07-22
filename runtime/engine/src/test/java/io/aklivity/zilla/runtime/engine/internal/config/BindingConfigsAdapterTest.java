@@ -42,7 +42,6 @@ import org.mockito.quality.Strictness;
 
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.ConfigAdapterContext;
-import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
 import io.aklivity.zilla.runtime.engine.config.RouteConfig;
 import io.aklivity.zilla.runtime.engine.test.internal.binding.config.TestBindingOptionsConfig;
 
@@ -82,7 +81,6 @@ public class BindingConfigsAdapterTest
         assertThat(bindings[0], not(nullValue()));
         assertThat(bindings[0].kind, equalTo(PROXY));
         assertThat(bindings[0].routes, emptyCollectionOf(RouteConfig.class));
-        assertThat(bindings[0].composites, not(emptyCollectionOf(NamespaceConfig.class)));
     }
 
     @Test
@@ -356,6 +354,62 @@ public class BindingConfigsAdapterTest
         assertThat(text, not(nullValue()));
         assertThat(text, equalTo("{\"test\":{\"type\":\"test\",\"kind\":\"server\"," +
                 "\"telemetry\":{\"metrics\":[\"test.counter\"]}}}"));
+    }
+
+    @Test
+    public void shouldWriteBindingWithCatalog()
+    {
+        BindingConfig[] bindings =
+            {
+                BindingConfig.builder()
+                    .namespace("test")
+                    .name("test")
+                    .type("test")
+                    .kind(SERVER)
+                    .catalog()
+                        .name("catalog0")
+                            .schema()
+                            .subject("echo")
+                            .build()
+                        .build()
+                    .build()
+            };
+
+        String text = jsonb.toJson(bindings);
+
+        assertThat(text, not(nullValue()));
+        assertThat(text, equalTo("{\"test\":{\"type\":\"test\",\"kind\":\"server\",\"catalog\":" +
+            "[{\"catalog0\":[{\"subject\":\"echo\"}]}]}}"));
+    }
+
+    @Test
+    public void shouldReadBindingWithCatalog()
+    {
+        String text =
+            "{" +
+                "  \"test\":" +
+                " {" +
+                "    \"type\": \"test\"," +
+                "    \"kind\": \"server\"," +
+                "    \"catalog\":" +
+                "     {" +
+                "      \"catalog0\":" +
+                "      [" +
+                "        {" +
+                "          \"subject\": \"echo\"" +
+                "        }" +
+                "      ]" +
+                "    }" +
+                "  }" +
+                "}";
+
+        BindingConfig[] bindings = jsonb.fromJson(text, BindingConfig[].class);
+
+        assertThat(bindings[0], not(nullValue()));
+        assertThat(bindings[0].name, equalTo("test"));
+        assertThat(bindings[0].kind, equalTo(SERVER));
+        assertThat(bindings[0].catalogs, hasSize(1));
+        assertThat(bindings[0].catalogs.stream().findFirst().get().name, equalTo("catalog0"));
     }
 
     @Test

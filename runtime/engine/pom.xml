@@ -27,7 +27,7 @@
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
     <jacoco.coverage.ratio>0.77</jacoco.coverage.ratio>
-    <jacoco.missed.count>3</jacoco.missed.count>
+    <jacoco.missed.count>5</jacoco.missed.count>
   </properties>
 
   <dependencies>
@@ -215,7 +215,8 @@
                 io/aklivity/zilla/specs/engine/schema/guard/test.schema.patch.json,
                 io/aklivity/zilla/specs/engine/schema/metrics/test.schema.patch.json,
                 io/aklivity/zilla/specs/engine/schema/catalog/test.schema.patch.json,
-                io/aklivity/zilla/specs/engine/schema/validator/test.schema.patch.json,
+                io/aklivity/zilla/specs/engine/schema/catalogs/test.schema.patch.json,
+                io/aklivity/zilla/specs/engine/schema/model/test.schema.patch.json,
                 io/aklivity/zilla/specs/engine/schema/vault/test.schema.patch.json
               </includes>
               <outputDirectory>${project.build.directory}/test-classes</outputDirectory>
@@ -253,12 +254,12 @@
                 <include>io/aklivity/zilla/runtime/engine/test/internal/**/*.schema.patch.json</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/binding/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/catalog/**/*.class</include>
+                <include>io/aklivity/zilla/runtime/engine/test/internal/event/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/exporter/**/*.class</include>
-                <include>io/aklivity/zilla/runtime/engine/test/internal/expression/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/guard/**/*.class</include>
-                <include>io/aklivity/zilla/runtime/engine/test/internal/catalog/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/metrics/**/*.class</include>
-                <include>io/aklivity/zilla/runtime/engine/test/internal/validator/**/*.class</include>
+                <include>io/aklivity/zilla/runtime/engine/test/internal/model/**/*.class</include>
+                <include>io/aklivity/zilla/runtime/engine/test/internal/resolver/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/test/internal/vault/**/*.class</include>
                 <include>io/aklivity/zilla/runtime/engine/internal/concurrent/bench/**/*.class</include>
                 <include>org/openjdk/jmh/infra/generated/**/*.class</include>

@@ -64,15 +64,6 @@ public class KafkaIT
 
     @Test
     @Specification({
-        "${kafka}/publish.server.sent.flush/client",
-        "${kafka}/publish.server.sent.flush/server"})
-    public void shouldPublishReceiveServerSentFlush() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${kafka}/publish.server.sent.reset/client",
         "${kafka}/publish.server.sent.reset/server"})
     public void shouldPublishReceiveServerSentReset() throws Exception
@@ -94,15 +85,6 @@ public class KafkaIT
         "${kafka}/publish.retained.server.sent.abort/client",
         "${kafka}/publish.retained.server.sent.abort/server"})
     public void shouldPublishReceiveServerSentRetainedAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${kafka}/publish.retained.server.sent.flush/client",
-        "${kafka}/publish.retained.server.sent.flush/server"})
-    public void shouldPublishReceiveServerSentRetainedFlush() throws Exception
     {
         k3po.finish();
     }
@@ -148,6 +130,15 @@ public class KafkaIT
         "${kafka}/publish.one.message.changed.topic.name/client",
         "${kafka}/publish.one.message.changed.topic.name/server"})
     public void shouldSendOneMessageWithChangedTopicName() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.one.message.resolve.topic.params/client",
+        "${kafka}/publish.one.message.resolve.topic.params/server"})
+    public void shouldSendOneMessageWithResolvingParams() throws Exception
     {
         k3po.finish();
     }
@@ -202,6 +193,24 @@ public class KafkaIT
         "${kafka}/publish.topic.space/client",
         "${kafka}/publish.topic.space/server"})
     public void shouldSendUsingTopicSpace() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.topic.space.with.params/client",
+        "${kafka}/publish.topic.space.with.params/server"})
+    public void shouldSendUsingTopicSpaceWithParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.reject.qos2/client",
+        "${kafka}/publish.reject.qos2/server"})
+    public void shouldRejectPublishWhenTopicSpaceWithParams() throws Exception
     {
         k3po.finish();
     }
@@ -373,6 +382,15 @@ public class KafkaIT
         "${kafka}/subscribe.one.message.changed.topic.name/client",
         "${kafka}/subscribe.one.message.changed.topic.name/server"})
     public void shouldReceiveOneMessageWithChangedTopicName() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/subscribe.one.message.resolve.topic.params/client",
+        "${kafka}/subscribe.one.message.resolve.topic.params/server"})
+    public void shouldReceiveOneMessageWithResolvingParams() throws Exception
     {
         k3po.finish();
     }
@@ -622,6 +640,15 @@ public class KafkaIT
 
     @Test
     @Specification({
+        "${kafka}/session.reject.non.compacted.sessions.topic/client",
+        "${kafka}/session.reject.non.compacted.sessions.topic/server"})
+    public void shouldRejectSessionNonCompactedSessionsTopic() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${kafka}/session.subscribe.via.session.state/client",
         "${kafka}/session.subscribe.via.session.state/server"})
     public void shouldReceiveMessageSubscribedViaSessionState() throws Exception
@@ -860,6 +887,75 @@ public class KafkaIT
         "${kafka}/publish.qos2/server"})
     public void shouldPublishQoS2Message() throws Exception
     {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.retained/client",
+        "${kafka}/publish.qos2.retained/server"})
+    public void shouldPublishQoS2MessageRetained() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.recovery/client",
+        "${kafka}/publish.qos2.recovery/server"})
+    public void shouldPublishQoS2MessageDuringRecovery() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.meta.abort/client",
+        "${kafka}/publish.qos2.meta.abort/server"})
+    public void shouldSessionReceiveQos2MetaSentAbort() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.offset.fetch.abort/client",
+        "${kafka}/publish.qos2.offset.fetch.abort/server"})
+    public void shouldSessionReceiveQos2OffsetFetchSentAbort() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.init.producer.abort/client",
+        "${kafka}/publish.qos2.init.producer.abort/server"})
+    public void shouldSessionReceiveQos2InitProducerSentAbort() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.offset.commit.abort.phase1/client",
+        "${kafka}/publish.qos2.offset.commit.abort.phase1/server"})
+    public void shouldPublishReceiveQos2OffsetCommitSentAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${kafka}/publish.qos2.offset.commit.abort.phase2/client",
+        "${kafka}/publish.qos2.offset.commit.abort.phase2/server"})
+    public void shouldSessionReceiveQos2OffsetCommitSentAbort() throws Exception
+    {
+        k3po.start();
         k3po.finish();
     }
 

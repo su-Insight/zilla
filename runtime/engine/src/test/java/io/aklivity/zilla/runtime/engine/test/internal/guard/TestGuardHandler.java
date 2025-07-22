@@ -50,6 +50,8 @@ public final class TestGuardHandler implements GuardHandler
 
     @Override
     public long reauthorize(
+        long traceId,
+        long bindingId,
         long contextId,
         String credentials)
     {
@@ -80,6 +82,13 @@ public final class TestGuardHandler implements GuardHandler
         long sessionId)
     {
         return "test";
+    }
+
+    @Override
+    public String credentials(
+        long sessionId)
+    {
+        return credentials;
     }
 
     @Override

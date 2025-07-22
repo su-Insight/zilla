@@ -64,15 +64,6 @@ public class MqttIT
 
     @Test
     @Specification({
-        "${mqtt}/publish.server.sent.flush/client",
-        "${mqtt}/publish.server.sent.flush/server"})
-    public void shouldPublishReceiveServerSentFlush() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
         "${mqtt}/publish.server.sent.reset/client",
         "${mqtt}/publish.server.sent.reset/server"})
     public void shouldPublishReceiveServerSentReset() throws Exception
@@ -154,6 +145,24 @@ public class MqttIT
 
     @Test
     @Specification({
+        "${mqtt}/publish.topic.space.with.params/client",
+        "${mqtt}/publish.topic.space.with.params/server"})
+    public void shouldSendUsingTopicSpaceWithParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.reject.qos2/client",
+        "${mqtt}/publish.reject.qos2/server"})
+    public void shouldRejectPublishWhenTopicSpaceWithParams() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${mqtt}/publish.client.topic.space/client",
         "${mqtt}/publish.client.topic.space/server"})
     public void shouldSendUsingClientTopicSpace() throws Exception
@@ -229,15 +238,6 @@ public class MqttIT
         "${mqtt}/subscribe.server.sent.abort/client",
         "${mqtt}/subscribe.server.sent.abort/server"})
     public void shouldSubscribeReceiveServerSentAbort() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${mqtt}/subscribe.server.sent.flush/client",
-        "${mqtt}/subscribe.server.sent.flush/server"})
-    public void shouldSubscribeReceiveServerSentFlush() throws Exception
     {
         k3po.finish();
     }
@@ -525,6 +525,15 @@ public class MqttIT
 
     @Test
     @Specification({
+        "${mqtt}/session.reject.non.compacted.sessions.topic/client",
+        "${mqtt}/session.reject.non.compacted.sessions.topic/server"})
+    public void shouldRejectSessionNonCompactedSessionsTopic() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${mqtt}/session.subscribe.via.session.state/client",
         "${mqtt}/session.subscribe.via.session.state/server"})
     public void shouldReceiveMessageSubscribedViaSessionState() throws Exception
@@ -682,6 +691,55 @@ public class MqttIT
         "${mqtt}/publish.qos2/client",
         "${mqtt}/publish.qos2/server"})
     public void shouldPublishQoS2Message() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.qos2.retained/client",
+        "${mqtt}/publish.qos2.retained/server"})
+    public void shouldPublishQoS2MessageRetained() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.qos2.recovery/client",
+        "${mqtt}/publish.qos2.recovery/server"})
+    public void shouldPublishQoS2MessageDuringRecovery() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.qos2.abort/client",
+        "${mqtt}/publish.qos2.abort/server"})
+    public void shouldSessionReceiveQos2Abort() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.qos2.offset.commit.abort.phase1/client",
+        "${mqtt}/publish.qos2.offset.commit.abort.phase1/server"})
+    public void shouldPublishReceiveQos2OffsetCommitSentAbort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${mqtt}/publish.qos2.offset.commit.abort.phase2/client",
+        "${mqtt}/publish.qos2.offset.commit.abort.phase2/server"})
+    public void shouldSessionReceiveQos2OffsetCommitAbort() throws Exception
     {
         k3po.start();
         k3po.finish();

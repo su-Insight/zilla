@@ -102,6 +102,15 @@ public class ConnectionIT
 
     @Test
     @Specification({
+        "${net}/connect.reject.exceeding.max.client.id/client",
+        "${net}/connect.reject.exceeding.max.client.id/server"})
+    public void shouldRejectExceedingClientIdMax() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${net}/disconnect/client",
         "${net}/disconnect/server"})
     public void shouldConnectThenDisconnect() throws Exception
@@ -114,6 +123,15 @@ public class ConnectionIT
         "${net}/connect.invalid.protocol.version/client",
         "${net}/connect.invalid.protocol.version/server"})
     public void shouldRejectInvalidProtocolVersion() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${net}/connect.unsupported.protocol.version/client",
+        "${net}/connect.unsupported.protocol.version/server"})
+    public void shouldRejectUnsupportedProtocolVersion() throws Exception
     {
         k3po.finish();
     }

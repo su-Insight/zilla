@@ -27,6 +27,7 @@ import static io.aklivity.zilla.runtime.engine.internal.stream.StreamId.serverIn
 import static io.aklivity.zilla.runtime.engine.internal.stream.StreamId.streamId;
 import static io.aklivity.zilla.runtime.engine.internal.stream.StreamId.streamIndex;
 import static io.aklivity.zilla.runtime.engine.internal.stream.StreamId.throttleIndex;
+import static io.aklivity.zilla.runtime.engine.internal.types.stream.FrameFW.FIELD_OFFSET_STREAM_ID;
 import static io.aklivity.zilla.runtime.engine.metrics.Metric.Kind.COUNTER;
 import static io.aklivity.zilla.runtime.engine.metrics.Metric.Kind.GAUGE;
 import static io.aklivity.zilla.runtime.engine.metrics.Metric.Kind.HISTOGRAM;
@@ -37,11 +38,13 @@ import static java.lang.ThreadLocal.withInitial;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.agrona.CloseHelper.quietClose;
 import static org.agrona.LangUtil.rethrowUnchecked;
+import static org.agrona.concurrent.AgentRunner.startOnThread;
 
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.SelectableChannel;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.Collection;
@@ -53,6 +56,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
@@ -60,12 +64,14 @@ import java.util.function.LongConsumer;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
-import java.util.function.ToLongFunction;
+import java.util.function.Supplier;
 
+import org.agrona.CloseHelper;
 import org.agrona.DeadlineTimerWheel;
 import org.agrona.DeadlineTimerWheel.TimerHandler;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
+import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
@@ -87,6 +93,7 @@ import io.aklivity.zilla.runtime.engine.binding.Binding;
 import io.aklivity.zilla.runtime.engine.binding.BindingContext;
 import io.aklivity.zilla.runtime.engine.binding.BindingHandler;
 import io.aklivity.zilla.runtime.engine.binding.function.MessageConsumer;
+import io.aklivity.zilla.runtime.engine.binding.function.MessageReader;
 import io.aklivity.zilla.runtime.engine.budget.BudgetCreditor;
 import io.aklivity.zilla.runtime.engine.budget.BudgetDebitor;
 import io.aklivity.zilla.runtime.engine.buffer.BufferPool;
@@ -95,8 +102,11 @@ import io.aklivity.zilla.runtime.engine.catalog.CatalogContext;
 import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
 import io.aklivity.zilla.runtime.engine.concurrent.Signaler;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
+import io.aklivity.zilla.runtime.engine.config.EngineConfigWriter;
+import io.aklivity.zilla.runtime.engine.config.ModelConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
-import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
+import io.aklivity.zilla.runtime.engine.event.EventFormatter;
+import io.aklivity.zilla.runtime.engine.event.EventFormatterFactory;
 import io.aklivity.zilla.runtime.engine.exporter.Exporter;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterContext;
 import io.aklivity.zilla.runtime.engine.exporter.ExporterHandler;
@@ -107,13 +117,14 @@ import io.aklivity.zilla.runtime.engine.internal.LabelManager;
 import io.aklivity.zilla.runtime.engine.internal.budget.DefaultBudgetCreditor;
 import io.aklivity.zilla.runtime.engine.internal.budget.DefaultBudgetDebitor;
 import io.aklivity.zilla.runtime.engine.internal.exporter.ExporterAgent;
+import io.aklivity.zilla.runtime.engine.internal.layouts.BindingsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.BudgetsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.BufferPoolLayout;
+import io.aklivity.zilla.runtime.engine.internal.layouts.EventsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.StreamsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.metrics.HistogramsLayout;
 import io.aklivity.zilla.runtime.engine.internal.layouts.metrics.ScalarsLayout;
 import io.aklivity.zilla.runtime.engine.internal.poller.Poller;
-import io.aklivity.zilla.runtime.engine.internal.stream.NamespacedId;
 import io.aklivity.zilla.runtime.engine.internal.stream.StreamId;
 import io.aklivity.zilla.runtime.engine.internal.stream.Target;
 import io.aklivity.zilla.runtime.engine.internal.types.stream.AbortFW;
@@ -130,10 +141,13 @@ import io.aklivity.zilla.runtime.engine.metrics.Collector;
 import io.aklivity.zilla.runtime.engine.metrics.Metric;
 import io.aklivity.zilla.runtime.engine.metrics.MetricContext;
 import io.aklivity.zilla.runtime.engine.metrics.MetricGroup;
+import io.aklivity.zilla.runtime.engine.model.ConverterHandler;
+import io.aklivity.zilla.runtime.engine.model.Model;
+import io.aklivity.zilla.runtime.engine.model.ModelContext;
+import io.aklivity.zilla.runtime.engine.model.ValidatorHandler;
+import io.aklivity.zilla.runtime.engine.namespace.NamespacedId;
 import io.aklivity.zilla.runtime.engine.poller.PollerKey;
 import io.aklivity.zilla.runtime.engine.util.function.LongLongFunction;
-import io.aklivity.zilla.runtime.engine.validator.Validator;
-import io.aklivity.zilla.runtime.engine.validator.ValidatorFactory;
 import io.aklivity.zilla.runtime.engine.vault.Vault;
 import io.aklivity.zilla.runtime.engine.vault.VaultContext;
 import io.aklivity.zilla.runtime.engine.vault.VaultHandler;
@@ -198,6 +212,7 @@ public class EngineWorker implements EngineContext, Agent
     private final ElektronSignaler signaler;
     private final Long2ObjectHashMap<MessageConsumer> correlations;
     private final Long2ObjectHashMap<AgentRunner> exportersById;
+    private final Map<String, ModelContext> modelsByType;
 
     private final EngineRegistry registry;
     private final Deque<Runnable> taskQueue;
@@ -208,7 +223,11 @@ public class EngineWorker implements EngineContext, Agent
     private final ScalarsLayout countersLayout;
     private final ScalarsLayout gaugesLayout;
     private final HistogramsLayout histogramsLayout;
-    private final ValidatorFactory validatorFactory;
+    private final EventsLayout eventsLayout;
+    private final Int2ObjectHashMap<String> eventNames;
+    private final Supplier<MessageReader> supplyEventReader;
+    private final EventFormatterFactory eventFormatterFactory;
+
     private long initialId;
     private long promiseId;
     private long traceId;
@@ -216,6 +235,8 @@ public class EngineWorker implements EngineContext, Agent
     private long authorizedId;
 
     private long lastReadStreamId;
+
+    private volatile Thread thread;
 
     public EngineWorker(
         EngineConfiguration config,
@@ -228,11 +249,14 @@ public class EngineWorker implements EngineContext, Agent
         Collection<Guard> guards,
         Collection<Vault> vaults,
         Collection<Catalog> catalogs,
+        Collection<Model> models,
         Collection<MetricGroup> metricGroups,
-        ValidatorFactory validatorFactory,
         Collector collector,
+        Supplier<MessageReader> supplyEventReader,
+        EventFormatterFactory eventFormatterFactory,
         int index,
-        boolean readonly)
+        boolean readonly,
+        Consumer<NamespaceConfig> process)
     {
         this.localIndex = index;
         this.config = config;
@@ -283,6 +307,12 @@ public class EngineWorker implements EngineContext, Agent
                 .slotCount(config.bufferPoolCapacity() / config.bufferSlotCapacity())
                 .readonly(readonly)
                 .build();
+
+        this.eventsLayout = new EventsLayout.Builder()
+            .path(config.directory().resolve(String.format("events%d", index)))
+            .capacity(config.eventsBufferCapacity())
+            .build();
+        this.eventNames = new Int2ObjectHashMap<>();
 
         this.agentName = String.format("engine/data#%d", index);
         this.streamsLayout = streamsLayout;
@@ -372,6 +402,14 @@ public class EngineWorker implements EngineContext, Agent
             catalogsByType.put(type, catalog.supply(this));
         }
 
+        Map<String, ModelContext> modelsByType = new LinkedHashMap<>();
+        for (Model model : models)
+        {
+            String type = model.name();
+            modelsByType.put(type, model.supply(this));
+        }
+        this.modelsByType = modelsByType;
+
         Map<String, MetricContext> metricsByName = new LinkedHashMap<>();
         for (MetricGroup metricGroup : metricGroups)
         {
@@ -391,13 +429,15 @@ public class EngineWorker implements EngineContext, Agent
         this.registry = new EngineRegistry(
                 bindingsByType::get, guardsByType::get, vaultsByType::get, catalogsByType::get, metricsByName::get,
                 exportersByType::get, labels::supplyLabelId, this::onExporterAttached, this::onExporterDetached,
-                this::supplyMetricWriter, this::detachStreams, collector);
+                this::supplyMetricWriter, this::detachStreams, collector, process);
+
         this.taskQueue = new ConcurrentLinkedDeque<>();
         this.correlations = new Long2ObjectHashMap<>();
         this.idleStrategy = idleStrategy;
         this.errorHandler = errorHandler;
         this.exportersById = new Long2ObjectHashMap<>();
-        this.validatorFactory = validatorFactory;
+        this.supplyEventReader = supplyEventReader;
+        this.eventFormatterFactory = eventFormatterFactory;
     }
 
     public static int indexOfId(
@@ -430,6 +470,28 @@ public class EngineWorker implements EngineContext, Agent
         long namespacedId)
     {
         return labels.lookupLabel(NamespacedId.localId(namespacedId));
+    }
+
+    @Override
+    public String supplyQName(
+        long namespacedId)
+    {
+        return String.format("%s.%s", labels.lookupLabel(NamespacedId.namespaceId(namespacedId)),
+            labels.lookupLabel(NamespacedId.localId(namespacedId)));
+    }
+
+    @Override
+    public int supplyEventId(
+        String name)
+    {
+        return labels.supplyLabelId(name);
+    }
+
+    @Override
+    public String supplyEventName(
+            int eventId)
+    {
+        return eventNames.computeIfAbsent(eventId, this::computeEventName);
     }
 
     @Override
@@ -655,6 +717,30 @@ public class EngineWorker implements EngineContext, Agent
     }
 
     @Override
+    public ValidatorHandler supplyValidator(
+        ModelConfig config)
+    {
+        ModelContext model = modelsByType.get(config.model);
+        return model != null ? model.supplyValidatorHandler(config) : null;
+    }
+
+    @Override
+    public ConverterHandler supplyReadConverter(
+        ModelConfig config)
+    {
+        ModelContext model = modelsByType.get(config.model);
+        return model != null ? model.supplyReadConverterHandler(config) : null;
+    }
+
+    @Override
+    public ConverterHandler supplyWriteConverter(
+        ModelConfig config)
+    {
+        ModelContext model = modelsByType.get(config.model);
+        return model != null ? model.supplyWriteConverterHandler(config) : null;
+    }
+
+    @Override
     public URL resolvePath(
         String path)
     {
@@ -674,6 +760,45 @@ public class EngineWorker implements EngineContext, Agent
     public String roleName()
     {
         return agentName;
+    }
+
+    @Override
+    public void attachComposite(
+        NamespaceConfig composite)
+    {
+        assert thread == Thread.currentThread();
+
+        registry.process(composite);
+        registry.attachNow(composite);
+        writeBindingTypes(registry);
+
+        if (localIndex == 0 &&
+            config.verboseComposites())
+        {
+            EngineConfigWriter writer = new EngineConfigWriter(null);
+            System.out.println(writer.write(composite));
+        }
+    }
+
+    @Override
+    public void detachComposite(
+        NamespaceConfig composite)
+    {
+        assert thread == Thread.currentThread();
+
+        registry.detachNow(composite);
+        writeBindingTypes(registry);
+    }
+
+    public void doStart()
+    {
+        thread = startOnThread(runner, Thread::new);
+    }
+
+    public void doClose()
+    {
+        CloseHelper.close(runner);
+        thread = null;
     }
 
     @Override
@@ -781,18 +906,35 @@ public class EngineWorker implements EngineContext, Agent
     public CompletableFuture<Void> attach(
         NamespaceConfig namespace)
     {
+        assert thread != Thread.currentThread();
+
         NamespaceTask attachTask = registry.attach(namespace);
         taskQueue.offer(attachTask);
         signaler.signalNow(0L, 0L, 0L, supplyTraceId(), SIGNAL_TASK_QUEUED, 0);
+
+        if (localIndex == 0)
+        {
+            attachTask.future().join();
+            writeBindingTypes(registry);
+        }
+
         return attachTask.future();
     }
 
     public CompletableFuture<Void> detach(
         NamespaceConfig namespace)
     {
+        assert thread != Thread.currentThread();
+
         NamespaceTask detachTask = registry.detach(namespace);
         taskQueue.offer(detachTask);
         signaler.signalNow(0L, 0L, 0L, supplyTraceId(), SIGNAL_TASK_QUEUED, 0);
+
+        if (localIndex == 0)
+        {
+            detachTask.future().join();
+            writeBindingTypes(registry);
+        }
         return detachTask.future();
     }
 
@@ -863,11 +1005,42 @@ public class EngineWorker implements EngineContext, Agent
     }
 
     @Override
-    public Validator createValidator(
-        ValidatorConfig validator,
-        ToLongFunction<String> resolveId)
+    public MessageConsumer supplyEventWriter()
     {
-        return validatorFactory.create(validator, resolveId, this::supplyCatalog);
+        return this.eventsLayout::writeEvent;
+    }
+
+    @Override
+    public Clock clock()
+    {
+        return Clock.systemUTC();
+    }
+
+    private void writeBindingTypes(
+        EngineRegistry engine)
+    {
+        // assumes all composite bindings are attached on worker 0
+        if (localIndex == 0)
+        {
+            try (BindingsLayout layout = BindingsLayout.builder()
+                    .path(config.directory().resolve("bindings"))
+                    .build())
+            {
+                for (NamespaceRegistry namespace : engine.namespaces())
+                {
+                    for (BindingRegistry registry : namespace.bindings())
+                    {
+                        BindingConfig binding = registry.config();
+
+                        layout.writeBindingInfo(binding);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LangUtil.rethrowUnchecked(ex);
+            }
+        }
     }
 
     private void onSystemMessage(
@@ -1382,13 +1555,17 @@ public class EngineWorker implements EngineContext, Agent
         {
             MessageConsumer sentMetricHandler = supplyMetricRecorder(originId, ORIGIN, SENT)
                 .andThen(supplyMetricRecorder(routedId, ROUTED, SENT));
-            final MessageConsumer replyTo = supplyReplyTo(initialId).andThen(sentMetricHandler);
+            MessageConsumer receivedMetricHandler = supplyMetricRecorder(originId, ORIGIN, RECEIVED)
+                .andThen(supplyMetricRecorder(routedId, ROUTED, RECEIVED));
+            final MessageConsumer replyTo = supplyReplyTo(initialId)
+                .andThen(sentMetricHandler.filter(this::isReplyId))
+                .andThen(receivedMetricHandler.filter(this::isInitialId));
             newStream = streamFactory.newStream(msgTypeId, buffer, index, length, replyTo);
             if (newStream != null)
             {
-                MessageConsumer receivedMetricHandler = supplyMetricRecorder(originId, ORIGIN, RECEIVED)
-                    .andThen(supplyMetricRecorder(routedId, ROUTED, RECEIVED));
-                newStream = receivedMetricHandler.andThen(newStream);
+                newStream = receivedMetricHandler.filter(this::isInitialId)
+                    .andThen(sentMetricHandler.filter(this::isReplyId))
+                    .andThen(newStream);
 
                 final long replyId = supplyReplyId(initialId);
                 streams[streamIndex(initialId)].put(instanceId(initialId), newStream);
@@ -1399,6 +1576,24 @@ public class EngineWorker implements EngineContext, Agent
         }
 
         return newStream;
+    }
+
+    private boolean isInitialId(
+        int msgTypeId,
+        DirectBuffer buffer,
+        int index,
+        int length)
+    {
+        return StreamId.isInitial(buffer.getLong(index + FIELD_OFFSET_STREAM_ID));
+    }
+
+    private boolean isReplyId(
+        int msgTypeId,
+        DirectBuffer buffer,
+        int index,
+        int length)
+    {
+        return !StreamId.isInitial(buffer.getLong(index + FIELD_OFFSET_STREAM_ID));
     }
 
     private MessageConsumer handleBeginReply(
@@ -1530,6 +1725,27 @@ public class EngineWorker implements EngineContext, Agent
     {
         final int remoteIndex = serverIndex(streamId);
         return writersByIndex.computeIfAbsent(remoteIndex, supplyWriter);
+    }
+
+    public EventsLayout.EventAccessor createEventAccessor()
+    {
+        return eventsLayout.createEventAccessor();
+    }
+
+    public MessageReader supplyEventReader()
+    {
+        return supplyEventReader.get();
+    }
+
+    public EventFormatter supplyEventFormatter()
+    {
+        return eventFormatterFactory.create(config, this);
+    }
+
+    private String computeEventName(
+            int eventId)
+    {
+        return supplyLocalName(eventId).replace('.', '_').toUpperCase();
     }
 
     private MessageConsumer supplyWriter(
@@ -1923,7 +2139,7 @@ public class EngineWorker implements EngineContext, Agent
         }
     }
 
-    private static class Affinity
+    private static final class Affinity
     {
         BitSet mask;
         int nextIndex;
