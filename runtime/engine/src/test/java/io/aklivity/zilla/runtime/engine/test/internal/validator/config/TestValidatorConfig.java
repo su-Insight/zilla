@@ -21,9 +21,13 @@ import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 
 public class TestValidatorConfig extends ValidatorConfig
 {
-    public TestValidatorConfig()
+    public final int length;
+
+    public TestValidatorConfig(
+        int length)
     {
         super("test");
+        this.length = length;
     }
 
     public static <T> TestValidatorConfigBuilder<T> builder(

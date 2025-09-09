@@ -15,35 +15,36 @@
  */
 package io.aklivity.zilla.runtime.engine.test.internal.validator;
 
-import org.agrona.DirectBuffer;
+import java.net.URL;
 
+import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.validator.Validator;
+import io.aklivity.zilla.runtime.engine.validator.ValidatorContext;
 
 public class TestValidator implements Validator
 {
-    @Override
-    public boolean read(
-        DirectBuffer data,
-        int index,
-        int length)
+    public static final String NAME = "test";
+
+    public TestValidator()
     {
-        return validate(data, index, length);
     }
 
     @Override
-    public boolean write(
-        DirectBuffer data,
-        int index,
-        int length)
+    public String name()
     {
-        return validate(data, index, length);
+        return TestValidator.NAME;
     }
 
-    private boolean validate(
-        DirectBuffer data,
-        int index,
-        int length)
+    @Override
+    public ValidatorContext supply(
+        EngineContext context)
     {
-        return length == 13;
+        return new TestValidatorContext(context);
+    }
+
+    @Override
+    public URL type()
+    {
+        return getClass().getResource("test.schema.patch.json");
     }
 }

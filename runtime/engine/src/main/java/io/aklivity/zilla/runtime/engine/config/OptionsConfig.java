@@ -15,6 +15,24 @@
  */
 package io.aklivity.zilla.runtime.engine.config;
 
+import java.util.Collections;
+import java.util.List;
+
 public class OptionsConfig
 {
+    public final List<ConverterConfig> converters;
+    public final List<ValidatorConfig> validators;
+
+    public OptionsConfig()
+    {
+        this(Collections.emptyList(), Collections.emptyList());
+    }
+
+    public OptionsConfig(
+        List<ConverterConfig> converters,
+        List<ValidatorConfig> validators)
+    {
+        this.converters = converters;
+        this.validators = validators;
+    }
 }

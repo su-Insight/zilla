@@ -15,17 +15,16 @@
  */
 package io.aklivity.zilla.runtime.engine.validator;
 
-import org.agrona.DirectBuffer;
+import java.net.URL;
+
+import io.aklivity.zilla.runtime.engine.EngineContext;
 
 public interface Validator
 {
-    boolean read(
-        DirectBuffer data,
-        int index,
-        int length);
+    String name();
 
-    boolean write(
-        DirectBuffer data,
-        int index,
-        int length);
+    ValidatorContext supply(
+        EngineContext context);
+
+    URL type();
 }

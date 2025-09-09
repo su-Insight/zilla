@@ -32,7 +32,8 @@ import io.aklivity.zilla.runtime.binding.mqtt.config.MqttPatternConfig.MqttConne
 import io.aklivity.zilla.runtime.engine.EngineContext;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.KindConfig;
-import io.aklivity.zilla.runtime.engine.validator.Validator;
+import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
+import io.aklivity.zilla.runtime.engine.guard.GuardHandler;
 
 public final class MqttBindingConfig
 {
@@ -44,8 +45,9 @@ public final class MqttBindingConfig
     public final MqttOptionsConfig options;
     public final List<MqttRouteConfig> routes;
     public final Function<String, String> credentials;
-    public final Map<String, Validator> topics;
+    public final Map<String, ValidatorConfig> topics;
     public final ToLongFunction<String> resolveId;
+    public final GuardHandler guard;
 
     public MqttBindingConfig(
         BindingConfig binding,
@@ -62,8 +64,9 @@ public final class MqttBindingConfig
         this.topics = options != null &&
             options.topics != null
             ? options.topics.stream()
-            .collect(Collectors.toMap(t -> t.name,
-                t -> context.createValidator(t.content, resolveId))) : null;
+            .collect(Collectors.toMap(t -> t.name, t -> t.content)) : null;
+
+        this.guard = resolveGuard(context);
     }
 
     public MqttRouteConfig resolve(
@@ -105,6 +108,12 @@ public final class MqttBindingConfig
             .orElse(null);
     }
 
+    public ValidatorConfig supplyValidatorConfig(
+        String topic)
+    {
+        return topics != null ? topics.getOrDefault(topic, null) : null;
+    }
+
     public Function<String, String> credentials()
     {
         return credentials;
@@ -114,6 +123,21 @@ public final class MqttBindingConfig
     {
         return options != null && options.authorization != null ?
             options.authorization.credentials.connect.get(0).property : null;
+    }
+
+    private GuardHandler resolveGuard(
+        EngineContext context)
+    {
+        GuardHandler guard = null;
+
+        if (options != null &&
+            options.authorization != null)
+        {
+            long guardId = resolveId.applyAsLong(options.authorization.name);
+            guard = context.supplyGuard(guardId);
+        }
+
+        return guard;
     }
 
     private Function<String, String> asAccessor(

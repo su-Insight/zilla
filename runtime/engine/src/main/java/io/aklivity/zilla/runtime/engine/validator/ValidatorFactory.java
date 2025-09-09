@@ -23,51 +23,51 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.TreeMap;
-import java.util.function.LongFunction;
-import java.util.function.ToLongFunction;
 
-import io.aklivity.zilla.runtime.engine.catalog.CatalogHandler;
-import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
+import io.aklivity.zilla.runtime.engine.Configuration;
 
 public final class ValidatorFactory
 {
-    private final Map<String, ValidatorFactorySpi> validatorSpis;
+    private final Map<String, ValidatorFactorySpi> factorySpis;
 
     public static ValidatorFactory instantiate()
     {
         return instantiate(load(ValidatorFactorySpi.class));
     }
 
-    public Validator create(
-        ValidatorConfig config,
-        ToLongFunction<String> resolveId,
-        LongFunction<CatalogHandler> supplyCatalog)
+    public Iterable<String> names()
     {
-        String type = config.type;
-        requireNonNull(type, "name");
+        return factorySpis.keySet();
+    }
 
-        ValidatorFactorySpi validatorSpi = requireNonNull(validatorSpis.get(type), () -> "Unrecognized validator name: " + type);
+    public Validator create(
+        String name,
+        Configuration config)
+    {
+        requireNonNull(name, "name");
 
-        return validatorSpi.create(config, resolveId, supplyCatalog);
+        ValidatorFactorySpi factorySpi = requireNonNull(factorySpis.get(name), () -> "Unrecognized validator name: " + name);
+
+        return factorySpi.create(config);
     }
 
     public Collection<ValidatorFactorySpi> validatorSpis()
     {
-        return validatorSpis.values();
+        return factorySpis.values();
     }
 
     private static ValidatorFactory instantiate(
-        ServiceLoader<ValidatorFactorySpi> validators)
+        ServiceLoader<ValidatorFactorySpi> factories)
     {
-        Map<String, ValidatorFactorySpi> validatorSpisByName = new TreeMap<>();
-        validators.forEach(validatorSpi -> validatorSpisByName.put(validatorSpi.type(), validatorSpi));
+        Map<String, ValidatorFactorySpi> factorySpisByName = new TreeMap<>();
+        factories.forEach(factorySpi -> factorySpisByName.put(factorySpi.type(), factorySpi));
 
-        return new ValidatorFactory(unmodifiableMap(validatorSpisByName));
+        return new ValidatorFactory(unmodifiableMap(factorySpisByName));
     }
 
     private ValidatorFactory(
-        Map<String, ValidatorFactorySpi> validatorSpis)
+        Map<String, ValidatorFactorySpi> factorySpis)
     {
-        this.validatorSpis = validatorSpis;
+        this.factorySpis = factorySpis;
     }
 }

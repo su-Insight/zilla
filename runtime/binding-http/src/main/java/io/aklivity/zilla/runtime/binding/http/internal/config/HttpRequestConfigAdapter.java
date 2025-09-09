@@ -44,7 +44,7 @@ public class HttpRequestConfigAdapter implements JsonbAdapter<HttpRequestConfig,
     private static final String QUERY_PARAMS_NAME = "query";
     private static final String CONTENT_NAME = "content";
 
-    private final ValidatorConfigAdapter validator  = new ValidatorConfigAdapter();
+    private final ValidatorConfigAdapter validator = new ValidatorConfigAdapter();
 
     @Override
     public JsonObject adaptToJson(

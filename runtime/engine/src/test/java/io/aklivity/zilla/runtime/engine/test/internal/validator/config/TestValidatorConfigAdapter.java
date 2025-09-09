@@ -16,18 +16,17 @@
 package io.aklivity.zilla.runtime.engine.test.internal.validator.config;
 
 import jakarta.json.Json;
+import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 import jakarta.json.bind.adapter.JsonbAdapter;
 
-import io.aklivity.zilla.runtime.engine.config.SchemaConfigAdapter;
 import io.aklivity.zilla.runtime.engine.config.ValidatorConfig;
 import io.aklivity.zilla.runtime.engine.config.ValidatorConfigAdapterSpi;
 
 public class TestValidatorConfigAdapter implements ValidatorConfigAdapterSpi, JsonbAdapter<ValidatorConfig, JsonValue>
 {
     private static final String TEST = "test";
-
-    private final SchemaConfigAdapter schema = new SchemaConfigAdapter();
+    private static final String LENGTH = "length";
 
     @Override
     public String type()
@@ -43,9 +42,15 @@ public class TestValidatorConfigAdapter implements ValidatorConfigAdapterSpi, Js
     }
 
     @Override
-    public ValidatorConfig adaptFromJson(
+    public TestValidatorConfig adaptFromJson(
         JsonValue value)
     {
-        return TestValidatorConfig.builder().build();
+        JsonObject object = (JsonObject) value;
+
+        int length = object.containsKey(LENGTH)
+            ? object.getInt(LENGTH)
+            : 0;
+
+        return TestValidatorConfig.builder().length(length).build();
     }
 }

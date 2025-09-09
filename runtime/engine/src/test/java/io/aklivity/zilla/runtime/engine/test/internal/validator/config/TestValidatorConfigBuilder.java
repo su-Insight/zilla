@@ -24,6 +24,8 @@ public class TestValidatorConfigBuilder<T> extends ConfigBuilder<T, TestValidato
 {
     private final Function<ValidatorConfig, T> mapper;
 
+    private int length;
+
     TestValidatorConfigBuilder(
         Function<ValidatorConfig, T> mapper)
     {
@@ -37,9 +39,16 @@ public class TestValidatorConfigBuilder<T> extends ConfigBuilder<T, TestValidato
         return (Class<TestValidatorConfigBuilder<T>>) getClass();
     }
 
+    public TestValidatorConfigBuilder<T> length(
+        int length)
+    {
+        this.length = length;
+        return this;
+    }
+
     @Override
     public T build()
     {
-        return mapper.apply(new TestValidatorConfig());
+        return mapper.apply(new TestValidatorConfig(length));
     }
 }
