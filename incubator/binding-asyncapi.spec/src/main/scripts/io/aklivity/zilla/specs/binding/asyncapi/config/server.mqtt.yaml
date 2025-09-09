@@ -16,11 +16,99 @@
 
 ---
 name: test
+catalogs:
+  catalog0:
+    type: test
+    options:
+      subject: smartylighting
+      schema: |
+        asyncapi: 3.0.0
+        info:
+          title: Zilla MQTT Proxy
+          version: 1.0.0
+          license:
+            name: Aklivity Community License
+        servers:
+          production:
+            host: '{subdomain}.example.com:{port}'
+            protocol: mqtt
+            variables:
+              subdomain:
+                $ref: '#/components/serverVariables/subdomain'
+              port:
+                $ref: '#/components/serverVariables/port'
+          development:
+            host: '{subdomain}.dev.example.com:{port}'
+            protocol: mqtt
+            variables:
+              subdomain:
+                $ref: '#/components/serverVariables/subdomain'
+              port:
+                $ref: '#/components/serverVariables/port'
+                defaultContentType: application/json
+        channels:
+          sensors:
+            address: "sensors/{sensorId}"
+            title: MQTT Topic to produce & consume topic.
+            parameters:
+              streetlightId:
+                $ref: '#/components/parameters/sensorId'
+            messages:
+              items:
+                $ref: '#/components/messages/item'
+
+        operations:
+          sendEvents:
+            action: send
+            channel:
+              $ref: '#/channels/sensors'
+
+          receiveEvents:
+            action: receive
+            channel:
+              $ref: '#/channels/sensors'
+
+        components:
+          serverVariables:
+            subdomain:
+              enum:
+                - development
+                - staging
+                - production
+              default: development
+            port:
+              default: '1883'
+              enum:
+                - '1883'
+                - '8883'
+          parameters:
+            sensorId:
+              description: Sensor ID
+              location: $message.header#/id
+          messages:
+            item:
+              name: event
+              title: An event
+              headers:
+                type: object
+                properties:
+                  idempotency-key:
+                    description: Unique identifier for a given event
+                    type: string
+                  id:
+                    description: Sensor ID
+                    type: string
 bindings:
   composite0:
     type: asyncapi
     kind: server
     options:
       specs:
-        mqtt_api: mqtt/asyncapi.yaml
+        mqtt_api:
+          servers:
+            - host: 'development.dev.example.com:1883'
+          catalog:
+            catalog0:
+              subject: smartylighting
+              version: latest
     exit: asyncapi0
