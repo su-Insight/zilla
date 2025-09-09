@@ -35,7 +35,16 @@ public class SchemaTest
         .schemaPatch("io/aklivity/zilla/specs/binding/tcp/schema/tcp.schema.patch.json")
         .schemaPatch("io/aklivity/zilla/specs/binding/http/schema/http.schema.patch.json")
         .schemaPatch("io/aklivity/zilla/specs/engine/schema/vault/test.schema.patch.json")
+        .schemaPatch("io/aklivity/zilla/specs/engine/schema/catalog/test.schema.patch.json")
         .configurationRoot("io/aklivity/zilla/specs/binding/openapi/config");
+
+    @Test
+    public void shouldValidateServerWithSpecificUrl()
+    {
+        JsonObject config = schema.validate("server-prod.yaml");
+
+        assertThat(config, not(nullValue()));
+    }
 
     @Test
     public void shouldValidateServer()
