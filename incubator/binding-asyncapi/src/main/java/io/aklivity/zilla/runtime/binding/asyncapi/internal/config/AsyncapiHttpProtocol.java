@@ -12,17 +12,15 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.aklivity.zilla.runtime.binding.asyncapi.internal;
+package io.aklivity.zilla.runtime.binding.asyncapi.internal.config;
 
 import static io.aklivity.zilla.runtime.binding.http.config.HttpPolicyConfig.CROSS_ORIGIN;
-import static java.util.Objects.requireNonNull;
 
 import java.util.List;
 import java.util.Map;
 
 import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiOptionsConfig;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
-import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiItem;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiMessage;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiOperation;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiParameter;
@@ -52,21 +50,28 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
         "integer", Int32ModelConfig.builder().build()
     );
     private static final String SCHEME = "http";
+    private static final String SECURE_PROTOCOL = "https";
+
     private static final String SECURE_SCHEME = "https";
+    private final Map<String, String> securitySchemes;
+    private final boolean isJwtEnabled;
     private final String guardName;
     private final HttpAuthorizationConfig authorization;
 
     protected AsyncapiHttpProtocol(
         String qname,
         Asyncapi asyncApi,
-        AsyncapiOptionsConfig options)
+        AsyncapiOptionsConfig options,
+        String protocol)
     {
-        super(qname, asyncApi, SCHEME, SECURE_SCHEME);
+        super(qname, asyncApi, protocol, SCHEME);
+        this.securitySchemes = resolveSecuritySchemes();
+        this.isJwtEnabled = !securitySchemes.isEmpty();
+
         final HttpOptionsConfig httpOptions = options.http;
         this.guardName = httpOptions != null ? String.format("%s:%s", qname, httpOptions.authorization.name) : null;
         this.authorization = httpOptions != null ?  httpOptions.authorization : null;
     }
-
 
     @Override
     public <C> BindingConfigBuilder<C> injectProtocolServerOptions(
@@ -114,7 +119,7 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
     @Override
     protected boolean isSecure()
     {
-        return findFirstServerUrlWithScheme(SECURE_SCHEME) != null;
+        return protocol.equals(SECURE_PROTOCOL);
     }
 
     private <C> HttpOptionsConfigBuilder<C> injectHttpServerOptions(
@@ -248,29 +253,5 @@ public class AsyncapiHttpProtocol extends AsyncapiProtocol
             guarded.role(role);
         }
         return guarded;
-    }
-
-    private String resolveAuthorizationHeader()
-    {
-        requireNonNull(asyncApi);
-        requireNonNull(asyncApi.components);
-        String result = null;
-        if (asyncApi.components.messages != null)
-        {
-            for (Map.Entry<String, AsyncapiMessage> entry : asyncApi.components.messages.entrySet())
-            {
-                AsyncapiMessage message = entry.getValue();
-                if (message.headers != null && message.headers.properties != null)
-                {
-                    AsyncapiItem authorization = message.headers.properties.get("authorization");
-                    if (authorization != null)
-                    {
-                        result = authorization.description;
-                        break;
-                    }
-                }
-            }
-        }
-        return result;
     }
 }
