@@ -5124,6 +5124,19 @@ public final class HttpClientFactory implements HttpStreamFactory
             }
             cleanup(traceId, authorization);
         }
+
+        private void onResponseInvalid(
+            long traceId,
+            long authorization)
+        {
+            if (verbose)
+            {
+                System.out.printf("%s:%s %s: Skipping invalid response on method %s, path %s\n",
+                    System.currentTimeMillis(), context.supplyNamespace(routedId),
+                    context.supplyLocalName(routedId), requestType.method, requestType.path);
+            }
+            cleanup(traceId, authorization);
+        }
     }
 
     private final class HttpPromise
