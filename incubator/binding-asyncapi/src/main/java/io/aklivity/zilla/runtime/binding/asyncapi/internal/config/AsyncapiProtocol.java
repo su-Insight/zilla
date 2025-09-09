@@ -12,7 +12,7 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.aklivity.zilla.runtime.binding.asyncapi.internal;
+package io.aklivity.zilla.runtime.binding.asyncapi.internal.config;
 
 import static java.util.Objects.requireNonNull;
 
@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
 
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiMessage;
-import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiServer;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiMessageView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiSchemaView;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
@@ -43,24 +42,23 @@ public abstract class AsyncapiProtocol
     protected static final String VERSION_LATEST = "latest";
 
     protected final Matcher jsonContentType = JSON_CONTENT_TYPE.matcher("");
-
     protected Asyncapi asyncApi;
     protected String qname;
     protected Map<String, String> securitySchemes;
     protected boolean isJwtEnabled;
     public final String scheme;
-    public final String secureScheme;
+    public final String protocol;
 
     protected AsyncapiProtocol(
         String qname,
         Asyncapi asyncApi,
-        String scheme,
-        String secureScheme)
+        String protocol,
+        String scheme)
     {
         this.qname = qname;
         this.asyncApi = asyncApi;
+        this.protocol = protocol;
         this.scheme = scheme;
-        this.secureScheme = secureScheme;
         this.securitySchemes = resolveSecuritySchemes();
         this.isJwtEnabled = !securitySchemes.isEmpty();
     }
@@ -131,20 +129,6 @@ public abstract class AsyncapiProtocol
 
     protected abstract boolean isSecure();
 
-    protected int[] resolvePorts()
-    {
-        requireNonNull(scheme);
-        int[] ports = null;
-
-        for (AsyncapiServer s : asyncApi.servers.values())
-        {
-            String[] hostAndPort = s.host.split(":");
-            ports = new int[] {Integer.parseInt(hostAndPort[1])};
-            break;
-        }
-        return ports;
-    }
-
     protected Map<String, String> resolveSecuritySchemes()
     {
         requireNonNull(asyncApi);
@@ -187,12 +171,15 @@ public abstract class AsyncapiProtocol
         List<MetricRefConfig> metricRefs,
         String protocol)
     {
-        final TelemetryRefConfigBuilder<BindingConfigBuilder<C>> telemetry = binding.telemetry();
-        metricRefs.stream()
-            .filter(m -> m.name.startsWith("stream."))
-            .collect(Collectors.toList())
-            .forEach(m -> telemetry.metric(m));
-        telemetry.build();
+        if (metricRefs != null && !metricRefs.isEmpty())
+        {
+            final TelemetryRefConfigBuilder<BindingConfigBuilder<C>> telemetry = binding.telemetry();
+            metricRefs.stream()
+                .filter(m -> m.name.startsWith("stream."))
+                .collect(Collectors.toList())
+                .forEach(telemetry::metric);
+            telemetry.build();
+        }
         return binding;
     }
 }

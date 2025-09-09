@@ -12,20 +12,25 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.aklivity.zilla.runtime.binding.asyncapi.internal;
+package io.aklivity.zilla.runtime.binding.asyncapi.internal.config;
 
 import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.MINIMIZE_QUOTES;
 import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER;
 import static java.util.stream.Collectors.toList;
 import static org.agrona.LangUtil.rethrowUnchecked;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToLongFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
+
+import org.agrona.collections.MutableInteger;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,31 +38,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 
 import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiOptionsConfig;
+import io.aklivity.zilla.runtime.binding.asyncapi.config.AsyncapiServerConfig;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.Asyncapi;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiSchema;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiServer;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.model.AsyncapiTrait;
 import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiSchemaView;
+import io.aklivity.zilla.runtime.binding.asyncapi.internal.view.AsyncapiServerView;
 import io.aklivity.zilla.runtime.catalog.inline.config.InlineOptionsConfig;
 import io.aklivity.zilla.runtime.catalog.inline.config.InlineSchemaConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.BindingConfig;
 import io.aklivity.zilla.runtime.engine.config.BindingConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.MetricRefConfig;
+import io.aklivity.zilla.runtime.engine.config.NamespaceConfig;
 import io.aklivity.zilla.runtime.engine.config.NamespaceConfigBuilder;
 import io.aklivity.zilla.runtime.engine.config.TelemetryRefConfigBuilder;
 
-public class AsyncapiCompositeBindingAdapter
+public abstract class AsyncapiNamespaceGenerator
 {
     protected static final String INLINE_CATALOG_NAME = "catalog0";
     protected static final String INLINE_CATALOG_TYPE = "inline";
     protected static final String VERSION_LATEST = "latest";
     protected static final String APPLICATION_JSON = "application/json";
+    protected static final AsyncapiOptionsConfig EMPTY_OPTION =
+        new AsyncapiOptionsConfig(null, null, null, null, null, null, null);
     protected static final Pattern VARIABLE = Pattern.compile("\\{([^}]*.?)\\}");
-
     protected final Matcher variable = VARIABLE.matcher("");
 
     protected Asyncapi asyncapi;
-    protected Map<String, Asyncapi> asyncApis;
+    protected Map<String, Asyncapi> asyncapis;
     protected boolean isTlsEnabled;
     protected AsyncapiProtocol protocol;
     protected String qname;
@@ -65,9 +74,25 @@ public class AsyncapiCompositeBindingAdapter
     protected String qvault;
     protected String vault;
 
+    public NamespaceConfig generate(
+        BindingConfig binding,
+        Asyncapi asyncapi)
+    {
+        return null;
+    }
+
+    public NamespaceConfig generateProxy(
+        BindingConfig binding,
+        Map<String, Asyncapi> asyncapis,
+        ToLongFunction<String> resolveApiId)
+    {
+        return null;
+    }
+
     protected AsyncapiProtocol resolveProtocol(
         String protocolName,
-        AsyncapiOptionsConfig options)
+        AsyncapiOptionsConfig options,
+        List<AsyncapiServerView> servers)
     {
         Pattern pattern = Pattern.compile("(http|mqtt|kafka)");
         Matcher matcher = pattern.matcher(protocolName);
@@ -77,14 +102,14 @@ public class AsyncapiCompositeBindingAdapter
             switch (matcher.group())
             {
             case "http":
-                protocol = new AsyncapiHttpProtocol(qname, asyncapi, options);
+                protocol = new AsyncapiHttpProtocol(qname, asyncapi, options, protocolName);
                 break;
             case "mqtt":
-                protocol = new AyncapiMqttProtocol(qname, asyncapi, options, namespace);
+                protocol = new AsyncapiMqttProtocol(qname, asyncapi, options, protocolName, namespace);
                 break;
             case "kafka":
             case "kafka-secure":
-                protocol = new AyncapiKafkaProtocol(qname, asyncapi, options, protocolName);
+                protocol = new AyncapiKafkaProtocol(qname, asyncapi, servers, options, protocolName);
                 break;
             }
         }
@@ -95,13 +120,64 @@ public class AsyncapiCompositeBindingAdapter
         return protocol;
     }
 
-    protected void resolveServerVariables(
-        Asyncapi asyncApi)
+    protected List<AsyncapiServerView> filterAsyncapiServers(
+        Map<String, AsyncapiServer> servers,
+        List<AsyncapiServerConfig> serverConfigs)
     {
-        for (AsyncapiServer s : asyncApi.servers.values())
+        List<AsyncapiServerView> filtered;
+        Map<String, AsyncapiServerView> serverViews = servers.entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey, e -> AsyncapiServerView.of(e.getValue(), asyncapi.components.serverVariables)));
+        if (serverConfigs != null && !serverConfigs.isEmpty())
         {
-            s.host = variable.reset(s.host).replaceAll(mr -> s.variables.get(mr.group(1)).defaultValue);
+            filtered = new ArrayList<>();
+            serverConfigs.forEach(sc ->
+                filtered
+                    .addAll(serverViews.entrySet().stream()
+                        .filter(e ->
+                        {
+                            final AsyncapiServerView server = e.getValue();
+                            server.resolveHost(sc.host, sc.url);
+                            return sc.name.equals(e.getKey()) ||
+                                server.hostMatcher.reset(sc.host).matches() &&
+                                server.urlMatcher.reset(sc.url).matches() &&
+                                server.pathnameMatcher.reset(sc.pathname).matches();
+                        })
+
+                        .map(Map.Entry::getValue)
+                    .collect(Collectors.toList())));
         }
+        else
+        {
+            filtered = new ArrayList<>(serverViews.values());
+            filtered.forEach(s -> s.resolveHost("", ""));
+        }
+
+        return filtered;
+    }
+
+    public int[] resolveAllPorts(
+        List<AsyncapiServerView> servers)
+    {
+        int[] ports = new int[servers.size()];
+        for (int i = 0; i < servers.size(); i++)
+        {
+            AsyncapiServerView server = servers.get(i);
+            final String[] hostAndPort = server.host().split(":");
+            ports[i] = Integer.parseInt(hostAndPort[1]);
+        }
+        return ports;
+    }
+
+    public int[] resolvePorts(
+        List<AsyncapiServerView> servers,
+        boolean secure)
+    {
+        List<AsyncapiServerView> filtered =
+            servers.stream().filter(s -> s.getAsyncapiProtocol().isSecure() == secure).collect(toList());
+        int[] ports = new int[filtered.size()];
+        MutableInteger index = new MutableInteger();
+        filtered.forEach(s -> ports[index.value++] = s.getPort());
+        return ports;
     }
 
     protected <C> NamespaceConfigBuilder<C> injectCatalog(
@@ -201,8 +277,8 @@ public class AsyncapiCompositeBindingAdapter
         return binding;
     }
 
-    protected NamespaceConfigBuilder<BindingConfigBuilder<BindingConfig>> injectNamespaceMetric(
-        NamespaceConfigBuilder<BindingConfigBuilder<BindingConfig>> namespace,
+    protected <C> NamespaceConfigBuilder<C> injectNamespaceMetric(
+         NamespaceConfigBuilder<C> namespace,
         boolean hasMetrics)
     {
         if (hasMetrics)
